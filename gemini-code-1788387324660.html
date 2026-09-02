@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Horário de Estudos - UFG & ENEM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #f8fafc; font-family: 'Inter', sans-serif; }
+        .edit-mode { border-bottom: 2px dashed #3b82f6; outline: none; }
+        .cell:hover { background-color: #f1f5f9; cursor: pointer; }
+        .highlight-green { background-color: #d1fae5; color: #065f46; font-weight: 600; }
+        .highlight-blue { background-color: #dbeafe; color: #1e40af; font-weight: 600; }
+        .highlight-purple { background-color: #f3e8ff; color: #6b21a8; font-weight: 600; }
+    </style>
+</head>
+<body class="p-4 md:p-8 text-slate-800">
+    <div class="max-w-7xl mx-auto">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 bg-slate-900 text-white p-6 rounded-xl shadow-lg gap-4">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold">Horário de Estudos -- Paulo Ernani</h1>
+                <p class="text-slate-300 text-sm mt-1">Clique em qualquer bloco para editar. Salvo automaticamente no seu navegador.</p>
+            </div>
+            <button onclick="resetSchedule()" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg text-sm font-semibold transition whitespace-nowrap">
+                Restaurar Padrão
+            </button>
+        </header>
+
+        <!-- Tabela Segunda a Sábado -->
+        <h2 class="text-xl font-bold mb-4 text-slate-700">Segunda a Sábado (Vespertino / Noturno)</h2>
+        <div class="overflow-x-auto bg-white rounded-xl shadow-sm border border-slate-200 mb-8">
+            <table class="w-full text-left border-collapse min-w-[1000px]">
+                <thead>
+                    <tr class="bg-slate-50 text-slate-500 text-sm uppercase tracking-wider">
+                        <th class="p-4 border-b font-semibold">Horário</th>
+                        <th class="p-4 border-b font-semibold border-l bg-blue-50/50">Segunda (Sem A)</th>
+                        <th class="p-4 border-b font-semibold border-l bg-blue-50/50">Segunda (Sem B)</th>
+                        <th class="p-4 border-b font-semibold border-l">Terça</th>
+                        <th class="p-4 border-b font-semibold border-l">Quarta</th>
+                        <th class="p-4 border-b font-semibold border-l">Quinta</th>
+                        <th class="p-4 border-b font-semibold border-l">Sexta</th>
+                        <th class="p-4 border-b font-semibold border-l bg-purple-50/50">Sábado</th>
+                    </tr>
+                </thead>
+                <tbody id="weekday-body">
+                    <!-- Gerado via JavaScript -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Tabela Domingo -->
+        <h2 class="text-xl font-bold mb-4 text-slate-700">Domingo (Matutino)</h2>
+        <div class="overflow-x-auto bg-white rounded-xl shadow-sm border border-slate-200 max-w-2xl">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 text-slate-500 text-sm uppercase tracking-wider">
+                        <th class="p-4 border-b font-semibold w-1/3">Horário</th>
+                        <th class="p-4 border-b font-semibold border-l w-2/3 bg-purple-50/50">Disciplina / Atividade</th>
+                    </tr>
+                </thead>
+                <tbody id="sunday-body">
+                    <!-- Gerado via JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const defaultWeekday = [
+            { time: "14:30 - 15:00", segA: "Escrita na Medida", segB: "Igor (FÍS)", ter: "Fraga (MAT)", qua: "ESPECÍFICA MAT", qui: "Gabriel (MAT)", sex: "Elô (QUÍ)", sab: "SIMULADO DA ESCOLA" },
+            { time: "15:00 - 15:30", segA: "Escrita na Medida", segB: "Igor (FÍS)", ter: "Callefi (HIS)", qua: "ESPECÍFICA MAT", qui: "Zé Laranja (POR)", sex: "Ph (BIO)", sab: "" },
+            { time: "15:30 - 16:10", segA: "Escrita na Medida", segB: "Zé Laranja (POR)", ter: "Salviano (MAT)", qua: "ESPECÍFICA MAT", qui: "Fraga (MAT)", sex: "Fraga (MAT)", sab: "" },
+            { time: "16:10 - 16:30", segA: "Intervalo", segB: "Escrita na Medida", ter: "Intervalo", qua: "Intervalo", qui: "Intervalo", sex: "Intervalo", sab: "Intervalo" },
+            { time: "16:30 - 17:30", segA: "Academia", segB: "Escrita na Medida", ter: "ENTRE LINHAS", qua: "Beto (RED)", qui: "Academia", sex: "Academia", sab: "" },
+            { time: "17:30 - 18:30", segA: "Igor (FÍS)", segB: "Escrita na Medida", ter: "ENTRE LINHAS", qua: "CAMINHADA", qui: "Hugo (QUÍ)", sex: "Jairo (INT)", sab: "" },
+            { time: "18:30 - 19:00", segA: "Valdão (MAT)", segB: "Academia", ter: "Valdão (MAT)", qua: "Salviano (MAT)", qui: "Cristiano (HIS)", sex: "Gabriel (MAT)", sab: "" },
+            { time: "19:00 - 19:30", segA: "Gabriel (MAT)", segB: "Valdão (MAT)", ter: "Valdão (MAT)", qua: "Jutorides (GEO)", qui: "João Neto (GEO)", sex: "Zé Laranja (POR)", sab: "" },
+            { time: "19:30 - 20:00", segA: "Zé Laranja (POR)", segB: "Gabriel (MAT)", ter: "Beto (RED)", qua: "Pettras (LIT)", qui: "Zé Carlos (FÍS)", sex: "Fabrício (BIO)", sab: "" }
+        ];
+
+        const defaultSunday = [
+            { time: "08:00 - 08:30", dom: "Gu e Ga (QUÍ)" },
+            { time: "08:30 - 09:00", dom: "Gargano (SOC)" },
+            { time: "09:00 - 09:30", dom: "Lutiano (FÍS)" },
+            { time: "09:30 - 10:00", dom: "Jairo (INT)" },
+            { time: "10:00 - 10:30", dom: "Cássio (FIL)" },
+            { time: "10:30 - 11:00", dom: "Salviano (MAT)" },
+            { time: "11:00 - 11:30", dom: "Flávio (BIO)" },
+            { time: "11:30 - 12:30", dom: "PRODUÇÃO DE TEXTO" }
+        ];
+
+        function loadData(key, defaultData) {
+            const saved = localStorage.getItem(key);
+            return saved ? JSON.parse(saved) : defaultData;
+        }
+
+        function saveData(key, data) {
+            localStorage.setItem(key, JSON.stringify(data));
+        }
+
+        function applyHighlights(td, text) {
+            const upper = text.toUpperCase();
+            if (upper.includes('ACADEMIA') || upper.includes('CAMINHADA')) {
+                td.classList.add('highlight-green');
+            } else if (upper.includes('ESPECÍFICA') || upper.includes('ESCRITA')) {
+                td.classList.add('highlight-blue');
+            } else if (upper.includes('SIMULADO') || upper.includes('PRODUÇÃO DE TEXTO')) {
+                td.classList.add('highlight-purple');
+            }
+        }
+
+        function renderWeekday() {
+            const data = loadData('estudosUFG_weekday', defaultWeekday);
+            const tbody = document.getElementById('weekday-body');
+            tbody.innerHTML = '';
+
+            data.forEach((row, rowIndex) => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b last:border-0";
+                
+                const keys = ['time', 'segA', 'segB', 'ter', 'qua', 'qui', 'sex', 'sab'];
+                keys.forEach((key, colIndex) => {
+                    const td = document.createElement('td');
+                    td.className = `p-4 text-sm cell ${colIndex > 0 ? 'border-l' : 'font-medium text-slate-700 bg-slate-50'}`;
+                    
+                    let cellText = row[key] || '';
+                    applyHighlights(td, cellText);
+
+                    if (colIndex > 0) {
+                        td.contentEditable = true;
+                        td.addEventListener('blur', (e) => {
+                            const newData = loadData('estudosUFG_weekday', defaultWeekday);
+                            newData[rowIndex][key] = e.target.innerText;
+                            saveData('estudosUFG_weekday', newData);
+                            renderWeekday();
+                        });
+                        td.addEventListener('focus', (e) => e.target.classList.add('edit-mode'));
+                        td.addEventListener('blur', (e) => e.target.classList.remove('edit-mode'));
+                    }
+                    td.innerText = cellText;
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderSunday() {
+            const data = loadData('estudosUFG_sunday', defaultSunday);
+            const tbody = document.getElementById('sunday-body');
+            tbody.innerHTML = '';
+
+            data.forEach((row, rowIndex) => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b last:border-0";
+                
+                const keys = ['time', 'dom'];
+                keys.forEach((key, colIndex) => {
+                    const td = document.createElement('td');
+                    td.className = `p-4 text-sm cell ${colIndex > 0 ? 'border-l' : 'font-medium text-slate-700 bg-slate-50'}`;
+                    
+                    let cellText = row[key] || '';
+                    applyHighlights(td, cellText);
+
+                    if (colIndex > 0) {
+                        td.contentEditable = true;
+                        td.addEventListener('blur', (e) => {
+                            const newData = loadData('estudosUFG_sunday', defaultSunday);
+                            newData[rowIndex][key] = e.target.innerText;
+                            saveData('estudosUFG_sunday', newData);
+                            renderSunday();
+                        });
+                        td.addEventListener('focus', (e) => e.target.classList.add('edit-mode'));
+                        td.addEventListener('blur', (e) => e.target.classList.remove('edit-mode'));
+                    }
+                    td.innerText = cellText;
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+        }
+
+        function resetSchedule() {
+            if(confirm('Isso apagará suas edições e voltará ao horário original. Confirmar?')) {
+                localStorage.removeItem('estudosUFG_weekday');
+                localStorage.removeItem('estudosUFG_sunday');
+                renderWeekday();
+                renderSunday();
+            }
+        }
+
+        renderWeekday();
+        renderSunday();
+    </script>
+</body>
+</html>
