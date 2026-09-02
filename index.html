@@ -12,6 +12,17 @@
         .highlight-green { background-color: #d1fae5; color: #065f46; font-weight: 600; }
         .highlight-blue { background-color: #dbeafe; color: #1e40af; font-weight: 600; }
         .highlight-purple { background-color: #f3e8ff; color: #6b21a8; font-weight: 600; }
+        
+        /* Estilo para o horário atual */
+        .active-now {
+            outline: 3px solid #ef4444 !important; /* Borda vermelha */
+            outline-offset: -3px;
+            background-color: #fee2e2 !important; /* Fundo avermelhado */
+            color: #991b1b !important;
+            font-weight: 700;
+            position: relative;
+            z-index: 10;
+        }
     </style>
 </head>
 <body class="p-4 md:p-8 text-slate-800">
@@ -19,14 +30,13 @@
         <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 bg-slate-900 text-white p-6 rounded-xl shadow-lg gap-4">
             <div>
                 <h1 class="text-2xl md:text-3xl font-bold">Horário de Estudos -- Paulo Ernani</h1>
-                <p class="text-slate-300 text-sm mt-1">Clique em qualquer bloco para editar. Salvo automaticamente no seu navegador.</p>
+                <p class="text-slate-300 text-sm mt-1">Clique em qualquer bloco para editar. Salvo automaticamente.</p>
             </div>
             <button onclick="resetSchedule()" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg text-sm font-semibold transition whitespace-nowrap">
                 Restaurar Padrão
             </button>
         </header>
 
-        <!-- Tabela Segunda a Sábado -->
         <h2 class="text-xl font-bold mb-4 text-slate-700">Segunda a Sábado (Vespertino / Noturno)</h2>
         <div class="overflow-x-auto bg-white rounded-xl shadow-sm border border-slate-200 mb-8">
             <table class="w-full text-left border-collapse min-w-[1000px]">
@@ -42,13 +52,10 @@
                         <th class="p-4 border-b font-semibold border-l bg-purple-50/50">Sábado</th>
                     </tr>
                 </thead>
-                <tbody id="weekday-body">
-                    <!-- Gerado via JavaScript -->
-                </tbody>
+                <tbody id="weekday-body"></tbody>
             </table>
         </div>
 
-        <!-- Tabela Domingo -->
         <h2 class="text-xl font-bold mb-4 text-slate-700">Domingo (Matutino)</h2>
         <div class="overflow-x-auto bg-white rounded-xl shadow-sm border border-slate-200 max-w-2xl">
             <table class="w-full text-left border-collapse">
@@ -58,9 +65,7 @@
                         <th class="p-4 border-b font-semibold border-l w-2/3 bg-purple-50/50">Disciplina / Atividade</th>
                     </tr>
                 </thead>
-                <tbody id="sunday-body">
-                    <!-- Gerado via JavaScript -->
-                </tbody>
+                <tbody id="sunday-body"></tbody>
             </table>
         </div>
     </div>
@@ -142,6 +147,7 @@
                 });
                 tbody.appendChild(tr);
             });
+            updateCurrentTimeHighlight();
         }
 
         function renderSunday() {
@@ -177,6 +183,7 @@
                 });
                 tbody.appendChild(tr);
             });
+            updateCurrentTimeHighlight();
         }
 
         function resetSchedule() {
@@ -188,8 +195,56 @@
             }
         }
 
+        function updateCurrentTimeHighlight() {
+            document.querySelectorAll('.active-now').forEach(el => el.classList.remove('active-now'));
+
+            const now = new Date();
+            const currentDay = now.getDay(); // 0 = Domingo, 1 = Segunda ... 6 = Sábado
+            const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+            const parseTimeStr = (timeStr) => {
+                const parts = timeStr.split('-');
+                if (parts.length !== 2) return null;
+                const start = parts[0].split(':');
+                const end = parts[1].split(':');
+                return {
+                    start: parseInt(start[0]) * 60 + parseInt(start[1]),
+                    end: parseInt(end[0]) * 60 + parseInt(end[1])
+                };
+            };
+
+            const checkAndHighlight = (tbodyId, colIndices) => {
+                const tbody = document.getElementById(tbodyId);
+                if (!tbody) return;
+                
+                Array.from(tbody.rows).forEach(row => {
+                    const timeStr = row.cells[0].innerText;
+                    const times = parseTimeStr(timeStr);
+                    
+                    if (times && currentMinutes >= times.start && currentMinutes < times.end) {
+                        colIndices.forEach(idx => {
+                            if(row.cells[idx] && row.cells[idx].innerText.trim() !== "") {
+                                row.cells[idx].classList.add('active-now');
+                            }
+                        });
+                    }
+                });
+            };
+
+            if (currentDay === 0) {
+                checkAndHighlight('sunday-body', [1]); // Tabela de Domingo, coluna 1
+            } else {
+                // Mapeamento: Segunda (1 e 2), Terça (3), Quarta (4), Quinta (5), Sexta (6), Sábado (7)
+                const colMap = { 1: [1, 2], 2: [3], 3: [4], 4: [5], 5: [6], 6: [7] };
+                checkAndHighlight('weekday-body', colMap[currentDay]);
+            }
+        }
+
         renderWeekday();
         renderSunday();
+        
+        // Atualiza a verificação de horário a cada 1 minuto (60000 milissegundos)
+        setInterval(updateCurrentTimeHighlight, 60000);
     </script>
 </body>
 </html>
