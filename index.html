@@ -1,250 +1,260 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Horário de Estudos - UFG & ENEM</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { background-color: #f8fafc; font-family: 'Inter', sans-serif; }
-        .edit-mode { border-bottom: 2px dashed #3b82f6; outline: none; }
-        .cell:hover { background-color: #f1f5f9; cursor: pointer; }
-        .highlight-green { background-color: #d1fae5; color: #065f46; font-weight: 600; }
-        .highlight-blue { background-color: #dbeafe; color: #1e40af; font-weight: 600; }
-        .highlight-purple { background-color: #f3e8ff; color: #6b21a8; font-weight: 600; }
-        
-        /* Estilo para o horário atual */
-        .active-now {
-            outline: 3px solid #ef4444 !important; /* Borda vermelha */
-            outline-offset: -3px;
-            background-color: #fee2e2 !important; /* Fundo avermelhado */
-            color: #991b1b !important;
-            font-weight: 700;
-            position: relative;
-            z-index: 10;
-        }
-    </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+<title>Reta Final — UFG &amp; ENEM</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Firebase Compat (Fácil integração via CDN) -->
+<script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --ink:#161A20; --paper:#F6F7F9; --panel:#FFFFFF;
+    --exact:#1E3A5F; --exact-bg:#E9F1FA; --exact-bd:#B9CFE8;
+    --nat:#25506E; --nat-bg:#EAF3F8; --nat-bd:#BBD6E4;
+    --special:#2E6DA4; --special-bg:#EAF4FF; --special-bd:#BFDBFA;
+    --physical:#0F6B4C; --physical-bg:#E6F5EE; --physical-bd:#B7E1CC;
+    --assess:#6B3FA0; --assess-bg:#F3EAFB; --assess-bd:#DCC4F0;
+    --human:#8A5A28; --human-bg:#FBF3E7; --human-bd:#EAD3AE;
+    --lang:#1B655F; --lang-bg:#EAF7F6; --lang-bd:#BEE3E0;
+    --brk:#6B7280; --brk-bg:#F1F2F4; --brk-bd:#DDE0E4;
+  }
+  body{font-family:system-ui,sans-serif; background:var(--paper); color:var(--ink);}
+  .tab-underline.active::after{content:"";position:absolute;left:0;right:0;bottom:-9px;height:3px;background:var(--exact);}
+</style>
 </head>
-<body class="p-4 md:p-8 text-slate-800">
-    <div class="max-w-7xl mx-auto">
-        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 bg-slate-900 text-white p-6 rounded-xl shadow-lg gap-4">
-            <div>
-                <h1 class="text-2xl md:text-3xl font-bold">Horário de Estudos -- Paulo Ernani</h1>
-                <p class="text-slate-300 text-sm mt-1">Clique em qualquer bloco para editar. Salvo automaticamente.</p>
-            </div>
-            <button onclick="resetSchedule()" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg text-sm font-semibold transition whitespace-nowrap">
-                Restaurar Padrão
-            </button>
-        </header>
+<body class="min-h-screen pb-24">
 
-        <h2 class="text-xl font-bold mb-4 text-slate-700">Segunda a Sábado (Vespertino / Noturno)</h2>
-        <div class="overflow-x-auto bg-white rounded-xl shadow-sm border border-slate-200 mb-8">
-            <table class="w-full text-left border-collapse min-w-[1000px]">
-                <thead>
-                    <tr class="bg-slate-50 text-slate-500 text-sm uppercase tracking-wider">
-                        <th class="p-4 border-b font-semibold">Horário</th>
-                        <th class="p-4 border-b font-semibold border-l bg-blue-50/50">Segunda (Sem A)</th>
-                        <th class="p-4 border-b font-semibold border-l bg-blue-50/50">Segunda (Sem B)</th>
-                        <th class="p-4 border-b font-semibold border-l">Terça</th>
-                        <th class="p-4 border-b font-semibold border-l">Quarta</th>
-                        <th class="p-4 border-b font-semibold border-l">Quinta</th>
-                        <th class="p-4 border-b font-semibold border-l">Sexta</th>
-                        <th class="p-4 border-b font-semibold border-l bg-purple-50/50">Sábado</th>
-                    </tr>
-                </thead>
-                <tbody id="weekday-body"></tbody>
-            </table>
+<!-- TELA DE LOGIN -->
+<div id="auth-screen" class="flex items-center justify-center min-h-screen px-4">
+    <div class="bg-white p-8 rounded-2xl shadow-lg max-w-sm w-full text-center">
+        <h1 class="text-2xl font-bold mb-2">Acesso ao Horário</h1>
+        <p class="text-sm text-slate-500 mb-6">Entre ou crie uma conta para acessar sua grade sincronizada.</p>
+        <input id="email" type="email" placeholder="E-mail" class="w-full border rounded-lg px-4 py-2 mb-3 text-sm" />
+        <input id="password" type="password" placeholder="Senha" class="w-full border rounded-lg px-4 py-2 mb-4 text-sm" />
+        <div class="flex gap-2">
+            <button onclick="login()" class="flex-1 bg-[var(--ink)] text-white py-2 rounded-lg text-sm font-medium">Entrar</button>
+            <button onclick="register()" class="flex-1 border border-[var(--ink)] text-[var(--ink)] py-2 rounded-lg text-sm font-medium">Criar Conta</button>
         </div>
+        <p id="auth-error" class="text-red-500 text-xs mt-3 hidden"></p>
+    </div>
+</div>
 
-        <h2 class="text-xl font-bold mb-4 text-slate-700">Domingo (Matutino)</h2>
-        <div class="overflow-x-auto bg-white rounded-xl shadow-sm border border-slate-200 max-w-2xl">
-            <table class="w-full text-left border-collapse">
-                <thead>
-                    <tr class="bg-slate-50 text-slate-500 text-sm uppercase tracking-wider">
-                        <th class="p-4 border-b font-semibold w-1/3">Horário</th>
-                        <th class="p-4 border-b font-semibold border-l w-2/3 bg-purple-50/50">Disciplina / Atividade</th>
-                    </tr>
-                </thead>
-                <tbody id="sunday-body"></tbody>
-            </table>
+<!-- TELA DO APLICATIVO -->
+<div id="app-screen" class="hidden">
+    <header class="max-w-5xl mx-auto px-4 sm:px-6 pt-6 flex justify-between items-center">
+        <h1 class="text-2xl font-bold">Meu Horário</h1>
+        <button onclick="logout()" class="text-sm text-slate-500 hover:text-red-500">Sair da Conta</button>
+    </header>
+
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 mt-6">
+        <div class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+            <p class="text-sm text-slate-600">Sincronizado na nuvem. Suas edições são salvas automaticamente.</p>
+            <button onclick="openBuilder()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">+ Adicionar Bloco</button>
         </div>
     </div>
 
-    <script>
-        const defaultWeekday = [
-            { time: "14:30 - 15:00", segA: "Escrita na Medida", segB: "Igor (FÍS)", ter: "Fraga (MAT)", qua: "ESPECÍFICA MAT", qui: "Gabriel (MAT)", sex: "Elô (QUÍ)", sab: "SIMULADO DA ESCOLA" },
-            { time: "15:00 - 15:30", segA: "Escrita na Medida", segB: "Igor (FÍS)", ter: "Callefi (HIS)", qua: "ESPECÍFICA MAT", qui: "Zé Laranja (POR)", sex: "Ph (BIO)", sab: "" },
-            { time: "15:30 - 16:10", segA: "Escrita na Medida", segB: "Zé Laranja (POR)", ter: "Salviano (MAT)", qua: "ESPECÍFICA MAT", qui: "Fraga (MAT)", sex: "Fraga (MAT)", sab: "" },
-            { time: "16:10 - 16:30", segA: "Intervalo", segB: "Escrita na Medida", ter: "Intervalo", qua: "Intervalo", qui: "Intervalo", sex: "Intervalo", sab: "Intervalo" },
-            { time: "16:30 - 17:30", segA: "Academia", segB: "Escrita na Medida", ter: "ENTRE LINHAS", qua: "Beto (RED)", qui: "Academia", sex: "Academia", sab: "" },
-            { time: "17:30 - 18:30", segA: "Igor (FÍS)", segB: "Escrita na Medida", ter: "ENTRE LINHAS", qua: "CAMINHADA", qui: "Hugo (QUÍ)", sex: "Jairo (INT)", sab: "" },
-            { time: "18:30 - 19:00", segA: "Valdão (MAT)", segB: "Academia", ter: "Valdão (MAT)", qua: "Salviano (MAT)", qui: "Cristiano (HIS)", sex: "Gabriel (MAT)", sab: "" },
-            { time: "19:00 - 19:30", segA: "Gabriel (MAT)", segB: "Valdão (MAT)", ter: "Valdão (MAT)", qua: "Jutorides (GEO)", qui: "João Neto (GEO)", sex: "Zé Laranja (POR)", sab: "" },
-            { time: "19:30 - 20:00", segA: "Zé Laranja (POR)", segB: "Gabriel (MAT)", ter: "Beto (RED)", qua: "Pettras (LIT)", qui: "Zé Carlos (FÍS)", sex: "Fabrício (BIO)", sab: "" }
-        ];
+    <!-- Navegação de Dias -->
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 mt-6 border-b border-slate-200">
+        <nav id="day-tabs" class="flex gap-5 overflow-x-auto text-sm font-medium text-slate-500 pb-2"></nav>
+    </div>
 
-        const defaultSunday = [
-            { time: "08:00 - 08:30", dom: "Gu e Ga (QUÍ)" },
-            { time: "08:30 - 09:00", dom: "Gargano (SOC)" },
-            { time: "09:00 - 09:30", dom: "Lutiano (FÍS)" },
-            { time: "09:30 - 10:00", dom: "Jairo (INT)" },
-            { time: "10:00 - 10:30", dom: "Cássio (FIL)" },
-            { time: "10:30 - 11:00", dom: "Salviano (MAT)" },
-            { time: "11:00 - 11:30", dom: "Flávio (BIO)" },
-            { time: "11:30 - 12:30", dom: "PRODUÇÃO DE TEXTO" }
-        ];
+    <!-- Lista de Atividades -->
+    <main class="max-w-5xl mx-auto px-4 sm:px-6 mt-4">
+        <div id="schedule-list" class="flex flex-col gap-2 py-2"></div>
+        <p class="text-xs text-slate-400 mt-4 text-center" id="empty-state">Nenhuma atividade cadastrada para este dia.</p>
+    </main>
+</div>
 
-        function loadData(key, defaultData) {
-            const saved = localStorage.getItem(key);
-            return saved ? JSON.parse(saved) : defaultData;
-        }
+<!-- MODAL DO CONSTRUTOR -->
+<div id="builder-modal" class="hidden fixed inset-0 z-40 items-center justify-center bg-black/40 px-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <h2 class="font-bold mb-4">Adicionar Atividade</h2>
+        <div class="grid grid-cols-2 gap-3 mb-3">
+            <div>
+                <label class="block text-xs text-slate-500 mb-1">Dia da Semana</label>
+                <select id="b-day" class="w-full border rounded-lg px-3 py-2 text-sm">
+                    <option value="mon">Segunda</option>
+                    <option value="tue">Terça</option>
+                    <option value="wed">Quarta</option>
+                    <option value="thu">Quinta</option>
+                    <option value="fri">Sexta</option>
+                    <option value="sat">Sábado</option>
+                    <option value="sun">Domingo</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-slate-500 mb-1">Categoria (Cor)</label>
+                <select id="b-type" class="w-full border rounded-lg px-3 py-2 text-sm">
+                    <option value="exact">Exatas (Azul)</option>
+                    <option value="human">Humanas (Marrom)</option>
+                    <option value="lang">Linguagens (Verde)</option>
+                    <option value="physical">Corpo & Saúde (Esmeralda)</option>
+                    <option value="brk">Intervalo (Cinza)</option>
+                </select>
+            </div>
+        </div>
+        <input id="b-title" type="text" placeholder="Nome da Matéria" class="w-full border rounded-lg px-3 py-2 text-sm mb-3" />
+        <input id="b-teacher" type="text" placeholder="Professor (Opcional)" class="w-full border rounded-lg px-3 py-2 text-sm mb-3" />
+        <div class="grid grid-cols-2 gap-3 mb-6">
+            <div><label class="block text-xs text-slate-500 mb-1">Início</label><input id="b-start" type="time" class="w-full border rounded-lg px-3 py-2 text-sm" /></div>
+            <div><label class="block text-xs text-slate-500 mb-1">Fim</label><input id="b-end" type="time" class="w-full border rounded-lg px-3 py-2 text-sm" /></div>
+        </div>
+        <div class="flex gap-2 justify-end">
+            <button onclick="closeBuilder()" class="px-4 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-50">Cancelar</button>
+            <button onclick="saveBlock()" class="px-4 py-2 rounded-lg bg-[var(--ink)] text-white text-sm">Salvar na Nuvem</button>
+        </div>
+    </div>
+</div>
 
-        function saveData(key, data) {
-            localStorage.setItem(key, JSON.stringify(data));
-        }
+<script>
+// ==========================================
+// 1. COLE SUAS CHAVES DO FIREBASE AQUI
+// ==========================================
+const firebaseConfig = {
+  apiKey: "AIzaSyBtOgntGP8gJZB2xjrYhO4Ft49v1n-hFAQ",
+  authDomain: "horariodeestudos-38455.firebaseapp.com",
+  projectId: "horariodeestudos-38455",
+  storageBucket: "horariodeestudos-38455.firebasestorage.app",
+  messagingSenderId: "298343689620",
+  appId: "1:298343689620:web:2d00ab22a535abc1e37381"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
 
-        function applyHighlights(td, text) {
-            const upper = text.toUpperCase();
-            if (upper.includes('ACADEMIA') || upper.includes('CAMINHADA')) {
-                td.classList.add('highlight-green');
-            } else if (upper.includes('ESPECÍFICA') || upper.includes('ESCRITA')) {
-                td.classList.add('highlight-blue');
-            } else if (upper.includes('SIMULADO') || upper.includes('PRODUÇÃO DE TEXTO')) {
-                td.classList.add('highlight-purple');
-            }
-        }
+// ==========================================
+// LÓGICA DO APLICATIVO
+// ==========================================
+let currentUser = null;
+let userSchedule = { mon:[], tue:[], wed:[], thu:[], fri:[], sat:[], sun:[] };
+let selectedDay = 'mon';
 
-        function renderWeekday() {
-            const data = loadData('estudosUFG_weekday', defaultWeekday);
-            const tbody = document.getElementById('weekday-body');
-            tbody.innerHTML = '';
+const DAY_ORDER = [
+  {key:'mon', label:'Segunda'}, {key:'tue', label:'Terça'}, {key:'wed', label:'Quarta'},
+  {key:'thu', label:'Quinta'}, {key:'fri', label:'Sexta'}, {key:'sat', label:'Sábado'}, {key:'sun', label:'Domingo'}
+];
 
-            data.forEach((row, rowIndex) => {
-                const tr = document.createElement('tr');
-                tr.className = "border-b last:border-0";
-                
-                const keys = ['time', 'segA', 'segB', 'ter', 'qua', 'qui', 'sex', 'sab'];
-                keys.forEach((key, colIndex) => {
-                    const td = document.createElement('td');
-                    td.className = `p-4 text-sm cell ${colIndex > 0 ? 'border-l' : 'font-medium text-slate-700 bg-slate-50'}`;
-                    
-                    let cellText = row[key] || '';
-                    applyHighlights(td, cellText);
+const TYPES = {
+  exact: '--exact', human: '--human', lang: '--lang', physical: '--physical', brk: '--brk'
+};
 
-                    if (colIndex > 0) {
-                        td.contentEditable = true;
-                        td.addEventListener('blur', (e) => {
-                            const newData = loadData('estudosUFG_weekday', defaultWeekday);
-                            newData[rowIndex][key] = e.target.innerText;
-                            saveData('estudosUFG_weekday', newData);
-                            renderWeekday();
-                        });
-                        td.addEventListener('focus', (e) => e.target.classList.add('edit-mode'));
-                        td.addEventListener('blur', (e) => e.target.classList.remove('edit-mode'));
-                    }
-                    td.innerText = cellText;
-                    tr.appendChild(td);
-                });
-                tbody.appendChild(tr);
-            });
-            updateCurrentTimeHighlight();
-        }
+auth.onAuthStateChanged(user => {
+    if (user) {
+        currentUser = user;
+        document.getElementById('auth-screen').classList.add('hidden');
+        document.getElementById('app-screen').classList.remove('hidden');
+        loadDataFromCloud();
+    } else {
+        currentUser = null;
+        document.getElementById('auth-screen').classList.remove('hidden');
+        document.getElementById('app-screen').classList.add('hidden');
+    }
+});
 
-        function renderSunday() {
-            const data = loadData('estudosUFG_sunday', defaultSunday);
-            const tbody = document.getElementById('sunday-body');
-            tbody.innerHTML = '';
+function login() {
+    const e = document.getElementById('email').value, p = document.getElementById('password').value;
+    auth.signInWithEmailAndPassword(e, p).catch(err => showError("Erro ao entrar: Verifique e-mail e senha."));
+}
 
-            data.forEach((row, rowIndex) => {
-                const tr = document.createElement('tr');
-                tr.className = "border-b last:border-0";
-                
-                const keys = ['time', 'dom'];
-                keys.forEach((key, colIndex) => {
-                    const td = document.createElement('td');
-                    td.className = `p-4 text-sm cell ${colIndex > 0 ? 'border-l' : 'font-medium text-slate-700 bg-slate-50'}`;
-                    
-                    let cellText = row[key] || '';
-                    applyHighlights(td, cellText);
+function register() {
+    const e = document.getElementById('email').value, p = document.getElementById('password').value;
+    auth.createUserWithEmailAndPassword(e, p).catch(err => showError("Erro ao criar conta. A senha deve ter 6+ caracteres."));
+}
 
-                    if (colIndex > 0) {
-                        td.contentEditable = true;
-                        td.addEventListener('blur', (e) => {
-                            const newData = loadData('estudosUFG_sunday', defaultSunday);
-                            newData[rowIndex][key] = e.target.innerText;
-                            saveData('estudosUFG_sunday', newData);
-                            renderSunday();
-                        });
-                        td.addEventListener('focus', (e) => e.target.classList.add('edit-mode'));
-                        td.addEventListener('blur', (e) => e.target.classList.remove('edit-mode'));
-                    }
-                    td.innerText = cellText;
-                    tr.appendChild(td);
-                });
-                tbody.appendChild(tr);
-            });
-            updateCurrentTimeHighlight();
-        }
+function logout() { auth.signOut(); }
 
-        function resetSchedule() {
-            if(confirm('Isso apagará suas edições e voltará ao horário original. Confirmar?')) {
-                localStorage.removeItem('estudosUFG_weekday');
-                localStorage.removeItem('estudosUFG_sunday');
-                renderWeekday();
-                renderSunday();
-            }
-        }
+function showError(msg) {
+    const el = document.getElementById('auth-error');
+    el.innerText = msg; el.classList.remove('hidden');
+}
 
-        function updateCurrentTimeHighlight() {
-            document.querySelectorAll('.active-now').forEach(el => el.classList.remove('active-now'));
+async function loadDataFromCloud() {
+    const doc = await db.collection('schedules').doc(currentUser.uid).get();
+    if (doc.exists) userSchedule = doc.data();
+    renderTabs();
+    renderSchedule();
+}
 
-            const now = new Date();
-            const currentDay = now.getDay(); // 0 = Domingo, 1 = Segunda ... 6 = Sábado
-            const currentMinutes = now.getHours() * 60 + now.getMinutes();
+async function syncToCloud() {
+    await db.collection('schedules').doc(currentUser.uid).set(userSchedule);
+    renderSchedule();
+}
 
-            const parseTimeStr = (timeStr) => {
-                const parts = timeStr.split('-');
-                if (parts.length !== 2) return null;
-                const start = parts[0].split(':');
-                const end = parts[1].split(':');
-                return {
-                    start: parseInt(start[0]) * 60 + parseInt(start[1]),
-                    end: parseInt(end[0]) * 60 + parseInt(end[1])
-                };
-            };
+function renderTabs() {
+    const nav = document.getElementById('day-tabs');
+    nav.innerHTML = '';
+    DAY_ORDER.forEach(d => {
+        const btn = document.createElement('button');
+        btn.className = 'tab-underline relative whitespace-nowrap pb-2 ' + (selectedDay===d.key ? 'active font-bold text-[var(--ink)]' : '');
+        btn.textContent = d.label;
+        btn.onclick = () => { selectedDay = d.key; renderTabs(); renderSchedule(); };
+        nav.appendChild(btn);
+    });
+}
 
-            const checkAndHighlight = (tbodyId, colIndices) => {
-                const tbody = document.getElementById(tbodyId);
-                if (!tbody) return;
-                
-                Array.from(tbody.rows).forEach(row => {
-                    const timeStr = row.cells[0].innerText;
-                    const times = parseTimeStr(timeStr);
-                    
-                    if (times && currentMinutes >= times.start && currentMinutes < times.end) {
-                        colIndices.forEach(idx => {
-                            if(row.cells[idx] && row.cells[idx].innerText.trim() !== "") {
-                                row.cells[idx].classList.add('active-now');
-                            }
-                        });
-                    }
-                });
-            };
+function renderSchedule() {
+    const list = document.getElementById('schedule-list');
+    const emptyState = document.getElementById('empty-state');
+    list.innerHTML = '';
+    const blocks = userSchedule[selectedDay] || [];
+    
+    // Ordena os blocos pelo horário de início
+    blocks.sort((a, b) => a.start.localeCompare(b.start));
 
-            if (currentDay === 0) {
-                checkAndHighlight('sunday-body', [1]); // Tabela de Domingo, coluna 1
-            } else {
-                // Mapeamento: Segunda (1 e 2), Terça (3), Quarta (4), Quinta (5), Sexta (6), Sábado (7)
-                const colMap = { 1: [1, 2], 2: [3], 3: [4], 4: [5], 5: [6], 6: [7] };
-                checkAndHighlight('weekday-body', colMap[currentDay]);
-            }
-        }
+    if (blocks.length === 0) {
+        emptyState.classList.remove('hidden');
+    } else {
+        emptyState.classList.add('hidden');
+        blocks.forEach((blk, index) => {
+            const vColor = TYPES[blk.type] || '--exact';
+            const row = document.createElement('div');
+            row.className = `w-full text-left rounded-xl border px-4 py-3 flex items-center justify-between gap-4 bg-[var(${vColor}-bg)] border-[var(${vColor}-bd)]`;
+            row.innerHTML = `
+                <div class="flex items-center gap-4 flex-1">
+                    <div class="w-16 shrink-0 text-xs font-semibold" style="color:var(${vColor})">${blk.start}<br><span class="font-normal text-slate-400">${blk.end}</span></div>
+                    <div class="flex-1 min-w-0">
+                        <p class="font-medium truncate" style="color:var(${vColor})">${blk.title}</p>
+                        <p class="text-xs text-slate-500 truncate">${blk.teacher || ''}</p>
+                    </div>
+                </div>
+                <button onclick="deleteBlock(${index})" class="text-red-400 hover:text-red-600 text-sm font-bold px-2">&times;</button>
+            `;
+            list.appendChild(row);
+        });
+    }
+}
 
-        renderWeekday();
-        renderSunday();
-        
-        // Atualiza a verificação de horário a cada 1 minuto (60000 milissegundos)
-        setInterval(updateCurrentTimeHighlight, 60000);
-    </script>
+function openBuilder() { document.getElementById('builder-modal').classList.remove('hidden'); document.getElementById('builder-modal').classList.add('flex'); }
+function closeBuilder() { document.getElementById('builder-modal').classList.add('hidden'); document.getElementById('builder-modal').classList.remove('flex'); }
+
+function saveBlock() {
+    const day = document.getElementById('b-day').value;
+    const newBlock = {
+        type: document.getElementById('b-type').value,
+        title: document.getElementById('b-title').value || 'Sem Título',
+        teacher: document.getElementById('b-teacher').value,
+        start: document.getElementById('b-start').value || '00:00',
+        end: document.getElementById('b-end').value || '00:00'
+    };
+    
+    if(!userSchedule[day]) userSchedule[day] = [];
+    userSchedule[day].push(newBlock);
+    
+    syncToCloud();
+    closeBuilder();
+    document.getElementById('b-title').value = '';
+    document.getElementById('b-teacher').value = '';
+}
+
+function deleteBlock(index) {
+    if(confirm("Excluir esta atividade?")) {
+        userSchedule[selectedDay].splice(index, 1);
+        syncToCloud();
+    }
+}
+</script>
 </body>
 </html>
