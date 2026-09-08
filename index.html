@@ -5,10 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
 <title>Reta Final — UFG &amp; ENEM</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<!-- Firebase Compat (Fácil integração via CDN) -->
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- Firebase Compat -->
 <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore-compat.js"></script>
+
 <style>
   :root{
     --ink:#161A20; --paper:#F6F7F9; --panel:#FFFFFF;
@@ -21,51 +23,123 @@
     --lang:#1B655F; --lang-bg:#EAF7F6; --lang-bd:#BEE3E0;
     --brk:#6B7280; --brk-bg:#F1F2F4; --brk-bd:#DDE0E4;
   }
-  body{font-family:system-ui,sans-serif; background:var(--paper); color:var(--ink);}
-  .tab-underline.active::after{content:"";position:absolute;left:0;right:0;bottom:-9px;height:3px;background:var(--exact);}
+  body{font-family:'Inter',system-ui,sans-serif; background:var(--paper); color:var(--ink);}
+  .serif{font-family:'Fraunces',serif;}
+  .tab-underline{position:relative;}
+  .tab-underline.active::after{content:"";position:absolute;left:0;right:0;bottom:-9px;height:3px;border-radius:3px;background:var(--exact);}
+  .now-active{animation:pulseRing 2.4s ease-out infinite;}
+  @keyframes pulseRing{0%{box-shadow:0 0 0 0 rgba(30,58,95,.35);}70%{box-shadow:0 0 0 10px rgba(30,58,95,0);}100%{box-shadow:0 0 0 0 rgba(30,58,95,0);}}
+  .task-done { text-decoration: line-through; color: #9ca3af; }
+  .bar-fill{transition:height .6s ease, width .6s ease;}
 </style>
 </head>
 <body class="min-h-screen pb-24">
 
 <!-- TELA DE LOGIN -->
-<div id="auth-screen" class="flex items-center justify-center min-h-screen px-4">
+<div id="auth-screen" class="flex items-center justify-center min-h-screen px-4 bg-[var(--paper)]">
     <div class="bg-white p-8 rounded-2xl shadow-lg max-w-sm w-full text-center">
-        <h1 class="text-2xl font-bold mb-2">Acesso ao Horário</h1>
-        <p class="text-sm text-slate-500 mb-6">Entre ou crie uma conta para acessar sua grade sincronizada.</p>
-        <input id="email" type="email" placeholder="E-mail" class="w-full border rounded-lg px-4 py-2 mb-3 text-sm" />
-        <input id="password" type="password" placeholder="Senha" class="w-full border rounded-lg px-4 py-2 mb-4 text-sm" />
+        <h1 class="text-2xl font-bold mb-2">Painel de Estudos</h1>
+        <p class="text-sm text-slate-500 mb-6">Acesse seu horário sincronizado ou crie uma conta para começar a montar a sua grade.</p>
+        <input id="email" type="email" placeholder="E-mail" class="w-full border rounded-lg px-4 py-2 mb-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <input id="password" type="password" placeholder="Senha" class="w-full border rounded-lg px-4 py-2 mb-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         <div class="flex gap-2">
-            <button onclick="login()" class="flex-1 bg-[var(--ink)] text-white py-2 rounded-lg text-sm font-medium">Entrar</button>
-            <button onclick="register()" class="flex-1 border border-[var(--ink)] text-[var(--ink)] py-2 rounded-lg text-sm font-medium">Criar Conta</button>
+            <button onclick="login()" class="flex-1 bg-[var(--ink)] text-white py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition">Entrar</button>
+            <button onclick="register()" class="flex-1 border border-slate-300 text-slate-700 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 transition">Criar Conta</button>
         </div>
         <p id="auth-error" class="text-red-500 text-xs mt-3 hidden"></p>
     </div>
 </div>
 
-<!-- TELA DO APLICATIVO -->
+<!-- TELA PRINCIPAL DO APLICATIVO -->
 <div id="app-screen" class="hidden">
-    <header class="max-w-5xl mx-auto px-4 sm:px-6 pt-6 flex justify-between items-center">
-        <h1 class="text-2xl font-bold">Meu Horário</h1>
-        <button onclick="logout()" class="text-sm text-slate-500 hover:text-red-500">Sair da Conta</button>
-    </header>
-
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 mt-6">
-        <div class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-            <p class="text-sm text-slate-600">Sincronizado na nuvem. Suas edições são salvas automaticamente.</p>
-            <button onclick="openBuilder()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">+ Adicionar Bloco</button>
+    <!-- ALERTA PAUSA ATIVA -->
+    <div id="pause-alert" class="hidden max-w-5xl mx-auto px-4 sm:px-6 pt-4">
+        <div class="bg-blue-50 border border-blue-200 text-blue-800 rounded-xl px-4 py-3 flex items-center justify-between shadow-sm">
+            <p class="text-sm font-medium">💧 Hora de uma pausa! Você já está focado há mais de 1h30.</p>
+            <button onclick="dismissPauseAlert()" class="text-blue-500 font-bold px-2">&times;</button>
         </div>
     </div>
 
-    <!-- Navegação de Dias -->
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 mt-6 border-b border-slate-200">
-        <nav id="day-tabs" class="flex gap-5 overflow-x-auto text-sm font-medium text-slate-500 pb-2"></nav>
+    <!-- HEADER & CONTADORES -->
+    <header class="max-w-5xl mx-auto px-4 sm:px-6 pt-6 sm:pt-10">
+        <div class="flex justify-between items-center mb-6">
+            <p id="motivational-quote" class="text-sm italic font-medium text-slate-500"></p>
+            <button onclick="logout()" class="text-xs bg-red-100 text-red-600 px-3 py-1 rounded-full font-bold hover:bg-red-200">Sair da Conta</button>
+        </div>
+        <div class="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+                <p class="text-xs tracking-wide text-slate-500 mb-1">Painel de preparação</p>
+                <h1 class="serif text-3xl sm:text-4xl font-semibold text-[var(--ink)] leading-tight">Reta final</h1>
+            </div>
+            <div class="flex gap-3">
+                <div class="bg-white rounded-2xl border border-slate-200 px-4 py-3 min-w-[124px] text-center shadow-sm">
+                    <p class="text-[11px] text-slate-500">UFG · IA</p>
+                    <p id="cd-ufg" class="serif text-3xl font-semibold text-[var(--exact)] leading-none mt-1">—</p>
+                </div>
+                <div class="bg-white rounded-2xl border border-slate-200 px-4 py-3 min-w-[124px] text-center shadow-sm">
+                    <p class="text-[11px] text-slate-500">ENEM</p>
+                    <p id="cd-enem" class="serif text-3xl font-semibold text-[var(--assess)] leading-none mt-1">—</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTROLES E MODO DE EDIÇÃO -->
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 mt-6">
+        <div class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex-wrap gap-4">
+            <div id="monday-toggle" class="hidden items-center gap-2 bg-slate-100 rounded-full px-1 py-1 text-xs font-medium"></div>
+            <div class="flex gap-2 w-full sm:w-auto ml-auto">
+                <button id="toggle-mode-btn" onclick="toggleEditMode()" class="flex-1 sm:flex-none border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-50 transition">Modo Edição: Desativado</button>
+                <div id="edit-controls" class="hidden flex gap-2 w-full sm:w-auto">
+                    <button onclick="importMySchedule()" class="flex-1 sm:flex-none border border-blue-200 bg-blue-50 text-blue-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-100 transition">Carregar Grade UFG</button>
+                    <button onclick="openBuilder()" class="flex-1 sm:flex-none bg-[var(--ink)] text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-800 transition">+ Adicionar Bloco</button>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Lista de Atividades -->
-    <main class="max-w-5xl mx-auto px-4 sm:px-6 mt-4">
-        <div id="schedule-list" class="flex flex-col gap-2 py-2"></div>
-        <p class="text-xs text-slate-400 mt-4 text-center" id="empty-state">Nenhuma atividade cadastrada para este dia.</p>
+    <!-- NAVEGAÇÃO DE DIAS -->
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 mt-6 sticky top-0 z-20 bg-[var(--paper)]/95 backdrop-blur py-3 border-b border-slate-200">
+        <nav id="day-tabs" class="flex gap-4 sm:gap-5 overflow-x-auto text-sm font-medium text-slate-500 pb-1"></nav>
+    </div>
+
+    <!-- CORPO: GRADE E CHECKLIST -->
+    <main class="max-w-5xl mx-auto px-4 sm:px-6 mt-4 flex flex-col md:flex-row gap-6">
+        <div class="flex-1">
+            <div id="schedule-list" class="flex flex-col gap-2 py-2"></div>
+            <p id="empty-state" class="text-sm text-slate-400 mt-4 text-center hidden">Nenhuma atividade cadastrada. Ative o Modo Edição para adicionar blocos.</p>
+        </div>
+
+        <aside class="w-full md:w-80 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm h-fit">
+            <h2 class="text-sm font-bold mb-4 text-[var(--ink)]">Checklist Extra (Avulso)</h2>
+            <div class="flex gap-2 mb-4">
+                <input type="text" id="new-task-input" placeholder="Nova tarefa..." class="w-full text-sm border rounded-lg px-3 py-1.5 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-400" onkeypress="handleTaskEnter(event)">
+                <button onclick="addTask()" class="bg-slate-800 text-white px-3 rounded-lg text-sm hover:bg-slate-700 transition">+</button>
+            </div>
+            <ul id="task-list" class="flex flex-col gap-2 text-sm text-slate-600"></ul>
+        </aside>
     </main>
+
+    <!-- ADERÊNCIA E FREQUÊNCIA -->
+    <section class="max-w-5xl mx-auto px-4 sm:px-6 mt-8 mb-16 flex flex-col md:flex-row gap-6">
+        <div class="flex-1 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+            <p class="text-sm font-semibold text-[var(--ink)]">Frequência semanal por matéria</p>
+            <div id="freq-chart" class="flex flex-col gap-2.5 mt-4"></div>
+        </div>
+        <div class="flex-1 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+            <p class="text-sm font-semibold text-[var(--ink)]">Aderência Diária</p>
+            <p class="text-xs text-slate-500 mt-1">Blocos marcados como "Cumpridos" hoje.</p>
+            <div class="flex items-center gap-4 mt-6">
+                <div class="w-20 h-20 rounded-full flex items-center justify-center border-4 border-slate-100 relative">
+                    <div id="adherence-circle" class="absolute inset-0 rounded-full border-4 border-[var(--physical)] transition-all duration-500"></div>
+                    <span id="adherence-pct" class="text-xl font-bold text-slate-700">0%</span>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-600"><span id="adherence-completed">0</span> de <span id="adherence-total">0</span> blocos</p>
+                </div>
+            </div>
+        </div>
+    </section>
 </div>
 
 <!-- MODAL DO CONSTRUTOR -->
@@ -74,9 +148,10 @@
         <h2 class="font-bold mb-4">Adicionar Atividade</h2>
         <div class="grid grid-cols-2 gap-3 mb-3">
             <div>
-                <label class="block text-xs text-slate-500 mb-1">Dia da Semana</label>
+                <label class="block text-xs text-slate-500 mb-1">Dia</label>
                 <select id="b-day" class="w-full border rounded-lg px-3 py-2 text-sm">
-                    <option value="mon">Segunda</option>
+                    <option value="mon_a">Segunda (Semana A)</option>
+                    <option value="mon_b">Segunda (Semana B)</option>
                     <option value="tue">Terça</option>
                     <option value="wed">Quarta</option>
                     <option value="thu">Quinta</option>
@@ -86,13 +161,16 @@
                 </select>
             </div>
             <div>
-                <label class="block text-xs text-slate-500 mb-1">Categoria (Cor)</label>
+                <label class="block text-xs text-slate-500 mb-1">Categoria</label>
                 <select id="b-type" class="w-full border rounded-lg px-3 py-2 text-sm">
-                    <option value="exact">Exatas (Azul)</option>
-                    <option value="human">Humanas (Marrom)</option>
-                    <option value="lang">Linguagens (Verde)</option>
-                    <option value="physical">Corpo & Saúde (Esmeralda)</option>
-                    <option value="brk">Intervalo (Cinza)</option>
+                    <option value="exact">Exatas</option>
+                    <option value="human">Humanas</option>
+                    <option value="lang">Linguagens</option>
+                    <option value="nat">Ciências da Natureza</option>
+                    <option value="physical">Corpo & Saúde</option>
+                    <option value="assess">Simulado/Redação</option>
+                    <option value="special">Projeto Especial</option>
+                    <option value="brk">Intervalo</option>
                 </select>
             </div>
         </div>
@@ -126,20 +204,35 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 // ==========================================
-// LÓGICA DO APLICATIVO
+// DADOS OFICIAIS UFG (PARA IMPORTAÇÃO)
 // ==========================================
-let currentUser = null;
-let userSchedule = { mon:[], tue:[], wed:[], thu:[], fri:[], sat:[], sun:[] };
-let selectedDay = 'mon';
-
-const DAY_ORDER = [
-  {key:'mon', label:'Segunda'}, {key:'tue', label:'Terça'}, {key:'wed', label:'Quarta'},
-  {key:'thu', label:'Quinta'}, {key:'fri', label:'Sexta'}, {key:'sat', label:'Sábado'}, {key:'sun', label:'Domingo'}
-];
-
-const TYPES = {
-  exact: '--exact', human: '--human', lang: '--lang', physical: '--physical', brk: '--brk'
+function b(start,end,title,teacher,type){ return {start,end,title,teacher,type, _key: Math.random().toString(36).substr(2, 9)}; }
+const RAW_SCHEDULE = {
+  mon_a: [b('14:30','16:10','Escrita na Medida','Eletiva','special'), b('16:10','16:30','Intervalo','','brk'), b('16:30','17:30','Academia','','physical'), b('17:30','18:30','Física','Igor','exact'), b('18:30','19:00','Matemática','Valdão','exact'), b('19:00','19:30','Matemática','Gabriel','exact'), b('19:30','20:00','Português','Zé Laranja','lang')],
+  mon_b: [b('14:30','15:30','Física','Igor','exact'), b('15:30','16:10','Português','Zé Laranja','lang'), b('16:10','18:10','Escrita na Medida','Eletiva','special'), b('18:10','19:10','Academia','Horário adaptado','physical'), b('19:10','19:40','Matemática','Valdão','exact'), b('19:40','20:10','Matemática','Gabriel','exact')],
+  tue: [b('14:30','15:00','Matemática','Fraga','exact'), b('15:00','15:30','História','Callefi','human'), b('15:30','16:10','Matemática','Salviano','exact'), b('16:10','16:30','Intervalo','','brk'), b('16:30','17:30','Entre Linhas','','lang'), b('17:30','18:30','Entre Linhas','','lang'), b('18:30','19:00','Matemática','Valdão','exact'), b('19:00','19:30','Matemática','Valdão','exact'), b('19:30','20:00','Redação','Beto','lang')],
+  wed: [b('14:30','16:10','Específica de Matemática','','special'), b('16:10','16:30','Intervalo','','brk'), b('16:30','17:30','Redação','Beto','lang'), b('17:30','18:30','Caminhada','','physical'), b('18:30','19:00','Matemática','Salviano','exact'), b('19:00','19:30','Geografia','Jutorides','human'), b('19:30','20:00','Literatura','Pettras','lang')],
+  thu: [b('14:30','15:00','Matemática','Gabriel','exact'), b('15:00','15:30','Português','Zé Laranja','lang'), b('15:30','16:10','Matemática','Fraga','exact'), b('16:10','16:30','Intervalo','','brk'), b('16:30','17:30','Academia','','physical'), b('17:30','18:30','Química','Hugo','exact'), b('18:30','19:00','História','Cristiano','human'), b('19:00','19:30','Geografia','João Neto','human'), b('19:30','20:00','Física','Zé Carlos','exact')],
+  fri: [b('14:30','15:00','Química','Elô','exact'), b('15:00','15:30','Biologia','Ph','nat'), b('15:30','16:10','Matemática','Fraga','exact'), b('16:10','16:30','Intervalo','','brk'), b('16:30','17:30','Academia','','physical'), b('17:30','18:30','Inglês','Jairo','lang'), b('18:30','19:00','Matemática','Gabriel','exact'), b('19:00','19:30','Português','Zé Laranja','lang'), b('19:30','20:00','Biologia','Fabrício','nat')],
+  sat: [b('14:30','16:10','Simulado da Escola','','assess'), b('16:10','16:30','Intervalo','','brk')],
+  sun: [b('08:00','08:30','Química','Gu e Ga','exact'), b('08:30','09:00','Sociologia','Gargano','human'), b('09:00','09:30','Física','Lutiano','exact'), b('09:30','10:00','Inglês','Jairo','lang'), b('10:00','10:30','Filosofia','Cássio','human'), b('10:30','11:00','Matemática','Salviano','exact'), b('11:00','11:30','Biologia','Flávio','nat'), b('11:30','12:30','Produção de Texto','','assess')]
 };
+
+// ==========================================
+// ESTADO DO APP E FIREBASE
+// ==========================================
+const TYPES = { exact: '--exact', nat: '--nat', special: '--special', physical: '--physical', assess: '--assess', human: '--human', lang: '--lang', brk: '--brk' };
+const DAY_ORDER = [{key:'mon', label:'Seg', wd:1}, {key:'tue', label:'Ter', wd:2}, {key:'wed', label:'Qua', wd:3}, {key:'thu', label:'Qui', wd:4}, {key:'fri', label:'Sex', wd:5}, {key:'sat', label:'Sáb', wd:6}, {key:'sun', label:'Dom', wd:0}];
+
+let currentUser = null;
+let userSchedule = { mon_a:[], mon_b:[], tue:[], wed:[], thu:[], fri:[], sat:[], sun:[] };
+let adherence = {};
+let tasks = [];
+let isEditMode = false;
+
+let selectedDay = currentWeekdayKey();
+let mondayOverride = localStorage.getItem('ef_monday') || isoWeekParity(new Date());
+let activeStudyMinutes = 0;
 
 auth.onAuthStateChanged(user => {
     if (user) {
@@ -154,33 +247,62 @@ auth.onAuthStateChanged(user => {
     }
 });
 
-function login() {
-    const e = document.getElementById('email').value, p = document.getElementById('password').value;
-    auth.signInWithEmailAndPassword(e, p).catch(err => showError("Erro ao entrar: Verifique e-mail e senha."));
-}
-
-function register() {
-    const e = document.getElementById('email').value, p = document.getElementById('password').value;
-    auth.createUserWithEmailAndPassword(e, p).catch(err => showError("Erro ao criar conta. A senha deve ter 6+ caracteres."));
-}
-
+function login() { auth.signInWithEmailAndPassword(document.getElementById('email').value, document.getElementById('password').value).catch(() => showError("Erro ao entrar. Verifique credenciais.")); }
+function register() { auth.createUserWithEmailAndPassword(document.getElementById('email').value, document.getElementById('password').value).catch(() => showError("Erro. A senha deve ter 6+ caracteres.")); }
 function logout() { auth.signOut(); }
-
-function showError(msg) {
-    const el = document.getElementById('auth-error');
-    el.innerText = msg; el.classList.remove('hidden');
-}
+function showError(msg) { const el = document.getElementById('auth-error'); el.innerText = msg; el.classList.remove('hidden'); }
 
 async function loadDataFromCloud() {
-    const doc = await db.collection('schedules').doc(currentUser.uid).get();
-    if (doc.exists) userSchedule = doc.data();
-    renderTabs();
-    renderSchedule();
+    const doc = await db.collection('user_data').doc(currentUser.uid).get();
+    if (doc.exists) {
+        const data = doc.data();
+        userSchedule = data.schedule || userSchedule;
+        adherence = data.adherence || {};
+        tasks = data.tasks || [];
+    }
+    renderAll();
 }
 
 async function syncToCloud() {
-    await db.collection('schedules').doc(currentUser.uid).set(userSchedule);
+    if(currentUser) {
+        await db.collection('user_data').doc(currentUser.uid).set({
+            schedule: userSchedule, adherence: adherence, tasks: tasks
+        });
+    }
+}
+
+// ==========================================
+// LÓGICA CORE E RENDERIZAÇÃO
+// ==========================================
+function currentWeekdayKey(){ const wd = new Date().getDay(); const found = DAY_ORDER.find(d=>d.wd===wd); return found ? found.key : 'mon'; }
+function isoWeekParity(d){ const onejan = new Date(d.getFullYear(),0,1); const week = Math.ceil((((d - onejan) / 86400000) + onejan.getDay()+1)/7); return week % 2 === 1 ? 'A' : 'B'; }
+
+function toggleEditMode() {
+    isEditMode = !isEditMode;
+    const btn = document.getElementById('toggle-mode-btn');
+    const controls = document.getElementById('edit-controls');
+    
+    if (isEditMode) {
+        btn.innerText = "Modo Edição: Ativado";
+        btn.classList.replace('bg-white', 'bg-blue-50');
+        btn.classList.replace('text-slate-700', 'text-blue-700');
+        btn.classList.replace('border-slate-300', 'border-blue-200');
+        controls.classList.remove('hidden'); controls.classList.add('flex');
+    } else {
+        btn.innerText = "Modo Edição: Desativado";
+        btn.classList.replace('bg-blue-50', 'bg-white');
+        btn.classList.replace('text-blue-700', 'text-slate-700');
+        btn.classList.replace('border-blue-200', 'border-slate-300');
+        controls.classList.add('hidden'); controls.classList.remove('flex');
+    }
     renderSchedule();
+}
+
+function importMySchedule() {
+    if(confirm("Isso carregará a grade oficial UFG/ENEM na sua conta. Sobrescrever a grade atual?")) {
+        userSchedule = JSON.parse(JSON.stringify(RAW_SCHEDULE));
+        syncToCloud(); renderAll();
+    }
 }
 
 function renderTabs() {
@@ -188,73 +310,173 @@ function renderTabs() {
     nav.innerHTML = '';
     DAY_ORDER.forEach(d => {
         const btn = document.createElement('button');
-        btn.className = 'tab-underline relative whitespace-nowrap pb-2 ' + (selectedDay===d.key ? 'active font-bold text-[var(--ink)]' : '');
+        btn.className = 'tab-underline relative whitespace-nowrap pb-2 px-1 ' + (selectedDay===d.key ? 'active font-bold text-[var(--ink)]' : '');
         btn.textContent = d.label;
-        btn.onclick = () => { selectedDay = d.key; renderTabs(); renderSchedule(); };
+        btn.onclick = () => { selectedDay = d.key; renderAll(); };
         nav.appendChild(btn);
     });
+
+    const mt = document.getElementById('monday-toggle');
+    if(selectedDay === 'mon'){
+        mt.classList.remove('hidden'); mt.classList.add('flex');
+        mt.innerHTML = `<button onclick="setMonday('A')" class="px-3 py-1 rounded-full ${mondayOverride==='A'?'bg-[var(--ink)] text-white':'text-slate-500'}">Semana A</button>
+                        <button onclick="setMonday('B')" class="px-3 py-1 rounded-full ${mondayOverride==='B'?'bg-[var(--ink)] text-white':'text-slate-500'}">Semana B</button>`;
+    } else { mt.classList.add('hidden'); }
 }
+
+function setMonday(v) { mondayOverride = v; localStorage.setItem('ef_monday', v); renderAll(); }
+function toggleAdherence(key, status) { if (adherence[key] === status) delete adherence[key]; else adherence[key] = status; syncToCloud(); renderSchedule(); renderAdherenceStats(); }
 
 function renderSchedule() {
     const list = document.getElementById('schedule-list');
     const emptyState = document.getElementById('empty-state');
     list.innerHTML = '';
-    const blocks = userSchedule[selectedDay] || [];
     
-    // Ordena os blocos pelo horário de início
-    blocks.sort((a, b) => a.start.localeCompare(b.start));
+    const dayKey = selectedDay === 'mon' ? `mon_${mondayOverride.toLowerCase()}` : selectedDay;
+    const blocks = userSchedule[dayKey] || [];
+    blocks.sort((a,b) => a.start.localeCompare(b.start));
 
-    if (blocks.length === 0) {
-        emptyState.classList.remove('hidden');
-    } else {
+    const nowActive = (new Date().getDay() === DAY_ORDER.find(d=>d.key===selectedDay).wd);
+    const n = new Date(); const nowStr = String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+    let isAnyBlockActive = false;
+
+    if (blocks.length === 0) emptyState.classList.remove('hidden');
+    else {
         emptyState.classList.add('hidden');
-        blocks.forEach((blk, index) => {
+        blocks.forEach((blk, idx) => {
+            const isNow = nowActive && nowStr >= blk.start && nowStr < blk.end;
+            if (isNow && blk.type !== 'brk') isAnyBlockActive = true;
+
+            const stat = adherence[blk._key];
+            const statClass = stat === 'done' ? 'opacity-50 grayscale' : (stat === 'skipped' ? 'opacity-40 grayscale line-through' : '');
             const vColor = TYPES[blk.type] || '--exact';
+
+            const adButtons = blk.type !== 'brk' ? `
+                <div class="flex gap-1 shrink-0">
+                    <button onclick="toggleAdherence('${blk._key}', 'done')" class="p-1.5 text-xs rounded border ${stat==='done' ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-slate-400 hover:bg-slate-50'}">✓</button>
+                    <button onclick="toggleAdherence('${blk._key}', 'skipped')" class="p-1.5 text-xs rounded border ${stat==='skipped' ? 'bg-red-100 text-red-700 border-red-300' : 'bg-white text-slate-400 hover:bg-slate-50'}">✗</button>
+                </div>` : '';
+
+            const badgeAgora = isNow ? `<span class="text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full text-white shrink-0 shadow-sm" style="background:var(${vColor})">AGORA</span>` : '';
+            const deleteBtn = isEditMode ? `<button onclick="deleteBlock('${dayKey}', ${idx})" class="p-1.5 text-xs rounded border bg-white text-red-400 hover:bg-red-50 shrink-0 ml-2">🗑</button>` : '';
+
             const row = document.createElement('div');
-            row.className = `w-full text-left rounded-xl border px-4 py-3 flex items-center justify-between gap-4 bg-[var(${vColor}-bg)] border-[var(${vColor}-bd)]`;
+            row.className = `w-full text-left rounded-xl border px-4 py-3 flex items-center gap-4 transition hover:shadow-sm bg-[var(${vColor}-bg)] border-[var(${vColor}-bd)] ${isNow ? 'now-active ring-2 ring-offset-2 ring-[var('+vColor+')]' : ''} ${statClass}`;
             row.innerHTML = `
-                <div class="flex items-center gap-4 flex-1">
-                    <div class="w-16 shrink-0 text-xs font-semibold" style="color:var(${vColor})">${blk.start}<br><span class="font-normal text-slate-400">${blk.end}</span></div>
-                    <div class="flex-1 min-w-0">
+                <div class="w-12 sm:w-16 shrink-0 text-xs font-semibold" style="color:var(${vColor})">${blk.start}<br><span class="font-normal text-slate-400">${blk.end}</span></div>
+                <div class="flex-1 min-w-0 flex items-center justify-between gap-3">
+                    <div class="min-w-0">
                         <p class="font-medium truncate" style="color:var(${vColor})">${blk.title}</p>
-                        <p class="text-xs text-slate-500 truncate">${blk.teacher || ''}</p>
+                        ${blk.teacher ? `<p class="text-xs text-slate-500 truncate">${blk.teacher}</p>` : ''}
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        ${badgeAgora}
+                        ${adButtons}
+                        ${deleteBtn}
                     </div>
                 </div>
-                <button onclick="deleteBlock(${index})" class="text-red-400 hover:text-red-600 text-sm font-bold px-2">&times;</button>
             `;
             list.appendChild(row);
         });
     }
+
+    if (isAnyBlockActive) activeStudyMinutes += 0.5; else activeStudyMinutes = 0;
+    if (activeStudyMinutes >= 90) { document.getElementById('pause-alert').classList.remove('hidden'); activeStudyMinutes = 0; }
 }
+
+function dismissPauseAlert() { document.getElementById('pause-alert').classList.add('hidden'); }
+
+// ==========================================
+// TASKS, BUILDER E ESTATÍSTICAS
+// ==========================================
+function renderTasks() {
+    const list = document.getElementById('task-list');
+    list.innerHTML = '';
+    tasks.forEach((t, i) => {
+        const li = document.createElement('li'); li.className = "flex items-center gap-2";
+        li.innerHTML = `<input type="checkbox" class="w-4 h-4 rounded border-gray-300" ${t.done?'checked':''} onchange="toggleTask(${i})">
+                        <span class="flex-1 truncate ${t.done?'task-done':''}">${t.text}</span>
+                        <button onclick="removeTask(${i})" class="text-slate-400 hover:text-red-500 text-xs">&times;</button>`;
+        list.appendChild(li);
+    });
+}
+function addTask() { const v = document.getElementById('new-task-input').value.trim(); if(v) { tasks.push({text:v, done:false}); syncToCloud(); document.getElementById('new-task-input').value = ''; renderTasks(); } }
+function handleTaskEnter(e) { if(e.key==='Enter') addTask(); }
+function toggleTask(i) { tasks[i].done = !tasks[i].done; syncToCloud(); renderTasks(); }
+function removeTask(i) { tasks.splice(i,1); syncToCloud(); renderTasks(); }
 
 function openBuilder() { document.getElementById('builder-modal').classList.remove('hidden'); document.getElementById('builder-modal').classList.add('flex'); }
 function closeBuilder() { document.getElementById('builder-modal').classList.add('hidden'); document.getElementById('builder-modal').classList.remove('flex'); }
 
 function saveBlock() {
     const day = document.getElementById('b-day').value;
-    const newBlock = {
+    if(!userSchedule[day]) userSchedule[day] = [];
+    userSchedule[day].push({
+        _key: Math.random().toString(36).substr(2, 9),
         type: document.getElementById('b-type').value,
         title: document.getElementById('b-title').value || 'Sem Título',
         teacher: document.getElementById('b-teacher').value,
         start: document.getElementById('b-start').value || '00:00',
         end: document.getElementById('b-end').value || '00:00'
-    };
-    
-    if(!userSchedule[day]) userSchedule[day] = [];
-    userSchedule[day].push(newBlock);
-    
-    syncToCloud();
-    closeBuilder();
-    document.getElementById('b-title').value = '';
-    document.getElementById('b-teacher').value = '';
+    });
+    syncToCloud(); closeBuilder(); renderAll();
+    document.getElementById('b-title').value = ''; document.getElementById('b-teacher').value = '';
+}
+function deleteBlock(day, idx) { if(confirm("Excluir esta atividade?")) { userSchedule[day].splice(idx,1); syncToCloud(); renderSchedule(); renderFrequency(); renderAdherenceStats(); } }
+
+function renderCountdowns(){
+  const now = new Date();
+  document.getElementById('cd-ufg').textContent = Math.max(0, Math.ceil((new Date('2026-09-27T00:00:00') - now)/86400000));
+  document.getElementById('cd-enem').textContent = Math.max(0, Math.ceil((new Date('2026-11-08T00:00:00') - now)/86400000));
 }
 
-function deleteBlock(index) {
-    if(confirm("Excluir esta atividade?")) {
-        userSchedule[selectedDay].splice(index, 1);
-        syncToCloud();
-    }
+function renderFrequency() {
+    const counts = {}; 
+    Object.keys(userSchedule).forEach(k => {
+        if(k === 'mon_a' && mondayOverride === 'B') return;
+        if(k === 'mon_b' && mondayOverride === 'A') return;
+        userSchedule[k].forEach(blk => {
+            if(blk.type === 'brk') return;
+            if(!counts[blk.title]) counts[blk.title] = {count:0, type:blk.type};
+            counts[blk.title].count += 1;
+        });
+    });
+    const entries = Object.entries(counts).sort((a,b)=>b[1].count-a[1].count);
+    const max = entries.length ? entries[0][1].count : 1;
+    const wrap = document.getElementById('freq-chart'); wrap.innerHTML = '';
+    entries.forEach(([title, info]) => {
+        const pct = Math.max(6, Math.round((info.count/max)*100));
+        const color = `var(${TYPES[info.type]})`;
+        const row = document.createElement('div'); row.className = 'flex items-center gap-3';
+        row.innerHTML = `<span class="w-28 sm:w-40 shrink-0 text-xs text-slate-600 truncate">${title}</span>
+                         <div class="flex-1 h-3 rounded-full bg-slate-100 overflow-hidden"><div class="bar-fill h-full rounded-full" style="width:${pct}%; background:${color};"></div></div>
+                         <span class="w-8 shrink-0 text-right text-xs font-medium text-slate-500">${info.count}x</span>`;
+        wrap.appendChild(row);
+    });
 }
+
+function renderAdherenceStats() {
+    const dayKey = selectedDay === 'mon' ? `mon_${mondayOverride.toLowerCase()}` : selectedDay;
+    const blocks = (userSchedule[dayKey] || []).filter(b => b.type !== 'brk');
+    const total = blocks.length; let done = 0;
+    blocks.forEach(blk => { if(adherence[blk._key] === 'done') done++; });
+    const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+    
+    document.getElementById('adherence-total').innerText = total;
+    document.getElementById('adherence-completed').innerText = done;
+    document.getElementById('adherence-pct').innerText = pct + '%';
+    
+    const circle = document.getElementById('adherence-circle');
+    circle.style.clipPath = pct > 50 ? 'inset(0 0 0 0)' : `inset(0 0 0 ${100 - (pct*2)}%)`;
+}
+
+function renderAll() {
+    document.getElementById('motivational-quote').innerText = ["A disciplina é a ponte entre metas e realizações.","Apenas 1% de inspiração e 99% de transpiração.","Foco na UFG. Um bloco de cada vez."][new Date().getDay() % 3];
+    renderTabs(); renderSchedule(); renderTasks(); renderCountdowns(); renderFrequency(); renderAdherenceStats();
+}
+
+setInterval(renderSchedule, 30000);
+setInterval(renderCountdowns, 3600000);
 </script>
 </body>
 </html>
