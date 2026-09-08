@@ -31,9 +31,20 @@
   @keyframes pulseRing{0%{box-shadow:0 0 0 0 rgba(30,58,95,.35);}70%{box-shadow:0 0 0 10px rgba(30,58,95,0);}100%{box-shadow:0 0 0 0 rgba(30,58,95,0);}}
   .task-done { text-decoration: line-through; color: #9ca3af; }
   .bar-fill{transition:height .6s ease, width .6s ease;}
+  
+  /* Spinner de Carregamento da IA */
+  .loader { border: 4px solid #f3f3f3; border-top: 4px solid var(--exact); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 </style>
 </head>
-<body class="min-h-screen pb-24">
+<body class="min-h-screen pb-24 relative">
+
+<!-- OVERLAY DE CARREGAMENTO (IA) -->
+<div id="ai-loading" class="hidden fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm">
+    <div class="loader mb-4"></div>
+    <p class="text-[var(--ink)] font-bold text-lg">A IA está lendo o horário...</p>
+    <p class="text-slate-500 text-sm mt-2">Isso pode levar até 10 segundos.</p>
+</div>
 
 <!-- TELA DE LOGIN -->
 <div id="auth-screen" class="flex items-center justify-center min-h-screen px-4 bg-[var(--paper)]">
@@ -84,13 +95,19 @@
         </div>
     </header>
 
-    <!-- CONTROLES E MODO DE EDIÇÃO -->
+    <!-- CONTROLES, IA E MODO DE EDIÇÃO -->
     <div class="max-w-5xl mx-auto px-4 sm:px-6 mt-6">
         <div class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex-wrap gap-4">
             <div id="monday-toggle" class="hidden items-center gap-2 bg-slate-100 rounded-full px-1 py-1 text-xs font-medium"></div>
-            <div class="flex gap-2 w-full sm:w-auto ml-auto">
+            
+            <div class="flex gap-2 w-full sm:w-auto ml-auto flex-wrap">
+                <!-- Input invisível para a foto -->
+                <input type="file" id="image-upload" accept="image/*" class="hidden" onchange="processImageWithGemini(event)">
+                
                 <button id="toggle-mode-btn" onclick="toggleEditMode()" class="flex-1 sm:flex-none border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-50 transition">Modo Edição: Desativado</button>
-                <div id="edit-controls" class="hidden flex gap-2 w-full sm:w-auto">
+                
+                <div id="edit-controls" class="hidden flex gap-2 w-full sm:w-auto flex-wrap">
+                    <button onclick="document.getElementById('image-upload').click()" class="flex-1 sm:flex-none border border-purple-200 bg-purple-50 text-purple-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-purple-100 transition">📷 Ler Horário (Foto)</button>
                     <button onclick="importMySchedule()" class="flex-1 sm:flex-none border border-blue-200 bg-blue-50 text-blue-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-100 transition">Carregar Grade UFG</button>
                     <button onclick="openBuilder()" class="flex-1 sm:flex-none bg-[var(--ink)] text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-800 transition">+ Adicionar Bloco</button>
                 </div>
@@ -150,6 +167,7 @@
             <div>
                 <label class="block text-xs text-slate-500 mb-1">Dia</label>
                 <select id="b-day" class="w-full border rounded-lg px-3 py-2 text-sm">
+                    <option value="mon">Segunda</option>
                     <option value="mon_a">Segunda (Semana A)</option>
                     <option value="mon_b">Segunda (Semana B)</option>
                     <option value="tue">Terça</option>
@@ -189,7 +207,7 @@
 
 <script>
 // ==========================================
-// 1. COLE SUAS CHAVES DO FIREBASE AQUI
+// 1. CONFIGURAÇÕES DE API (COLE AQUI)
 // ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyBtOgntGP8gJZB2xjrYhO4Ft49v1n-hFAQ",
@@ -202,6 +220,9 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+
+// COLE SUA CHAVE DO GEMINI API AQUI
+const GEMINI_API_KEY = 'AQ.Ab8RN6JentsiyhUbIsoIpb3SjlLLjtDYKc98Zw-6FugZHEzKSQ'; 
 
 // ==========================================
 // DADOS OFICIAIS UFG (PARA IMPORTAÇÃO)
@@ -219,17 +240,17 @@ const RAW_SCHEDULE = {
 };
 
 // ==========================================
-// ESTADO DO APP E FIREBASE
+// ESTADO DO APP
 // ==========================================
 const TYPES = { exact: '--exact', nat: '--nat', special: '--special', physical: '--physical', assess: '--assess', human: '--human', lang: '--lang', brk: '--brk' };
 const DAY_ORDER = [{key:'mon', label:'Seg', wd:1}, {key:'tue', label:'Ter', wd:2}, {key:'wed', label:'Qua', wd:3}, {key:'thu', label:'Qui', wd:4}, {key:'fri', label:'Sex', wd:5}, {key:'sat', label:'Sáb', wd:6}, {key:'sun', label:'Dom', wd:0}];
 
 let currentUser = null;
-let userSchedule = { mon_a:[], mon_b:[], tue:[], wed:[], thu:[], fri:[], sat:[], sun:[] };
+let userSchedule = { mon:[], mon_a:[], mon_b:[], tue:[], wed:[], thu:[], fri:[], sat:[], sun:[] };
 let adherence = {};
 let tasks = [];
 let isEditMode = false;
-let editingBlockData = null; // Rastreia se estamos editando um bloco existente
+let editingBlockData = null;
 
 let selectedDay = currentWeekdayKey();
 let mondayOverride = localStorage.getItem('ef_monday') || isoWeekParity(new Date());
@@ -266,10 +287,77 @@ async function loadDataFromCloud() {
 
 async function syncToCloud() {
     if(currentUser) {
-        await db.collection('user_data').doc(currentUser.uid).set({
-            schedule: userSchedule, adherence: adherence, tasks: tasks
-        });
+        await db.collection('user_data').doc(currentUser.uid).set({ schedule: userSchedule, adherence: adherence, tasks: tasks });
     }
+}
+
+// ==========================================
+// EXTRAÇÃO DE IMAGEM COM GEMINI API
+// ==========================================
+async function processImageWithGemini(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Se a chave não estiver configurada, avisa o usuário.
+    if (!GEMINI_API_KEY || GEMINI_API_KEY === 'SUA_CHAVE_GEMINI_AQUI') {
+        alert("Erro: A chave da API do Gemini não foi configurada no código-fonte.");
+        return;
+    }
+
+    // Exibe overlay de loading
+    document.getElementById('ai-loading').classList.remove('hidden');
+
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        const base64Image = e.target.result.split(',')[1];
+
+        const payload = {
+            contents: [{
+                parts: [
+                    { text: "Extract the study schedule from this image. Return ONLY a valid JSON object matching exactly this structure: `{\"mon\": [], \"tue\": [{\"start\": \"14:30\", \"end\": \"15:15\", \"title\": \"Química\", \"teacher\": \"Hugo\", \"type\": \"exact\"}], \"wed\": [], \"thu\": [], \"fri\": [], \"sat\": [], \"sun\": []}`. Map subjects to types strictly choosing from: 'exact' (Math, Physics, Chemistry), 'nat' (Biology), 'human' (History, Geo, Phil, Soc), 'lang' (Portuguese, Redação, English, Text), 'brk' (Intervalo, Descansar). Ensure all times are in HH:MM format. Do not include markdown formatting like ```json. Do not include any explanations." },
+                    { inline_data: { mime_type: "image/jpeg", data: base64Image } }
+                ]
+            }]
+        };
+
+        try {
+            const response = await fetch(`[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$){GEMINI_API_KEY}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+            
+            if (result.candidates && result.candidates[0].content.parts[0].text) {
+                let jsonText = result.candidates[0].content.parts[0].text.trim();
+                // Limpeza de possíveis formatações residuais Markdown
+                jsonText = jsonText.replace(/^```json/g, '').replace(/^```/g, '').replace(/```$/g, '').trim();
+                
+                const newSchedule = JSON.parse(jsonText);
+                
+                // Adiciona chaves únicas para cada bloco gerado
+                for (const day in newSchedule) {
+                    newSchedule[day] = newSchedule[day].map(blk => ({...blk, _key: Math.random().toString(36).substr(2, 9)}));
+                }
+
+                if(confirm("Horário lido com sucesso pela IA! Deseja substituir sua grade atual por esta?")) {
+                    userSchedule = { ...userSchedule, ...newSchedule }; // Mescla com chaves existentes para não quebrar
+                    syncToCloud();
+                    renderAll();
+                }
+            } else {
+                alert("A IA não conseguiu interpretar a imagem. Tente enviar uma foto mais nítida.");
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao conectar com a API do Gemini. Verifique sua conexão e a validade da chave.");
+        } finally {
+            document.getElementById('ai-loading').classList.add('hidden');
+            event.target.value = ''; // Limpa o input
+        }
+    };
+    reader.readAsDataURL(file);
 }
 
 // ==========================================
@@ -285,30 +373,25 @@ function toggleEditMode() {
     
     if (isEditMode) {
         btn.innerText = "Modo Edição: Ativado";
-        btn.classList.replace('bg-white', 'bg-blue-50');
-        btn.classList.replace('text-slate-700', 'text-blue-700');
-        btn.classList.replace('border-slate-300', 'border-blue-200');
+        btn.classList.replace('bg-white', 'bg-blue-50'); btn.classList.replace('text-slate-700', 'text-blue-700'); btn.classList.replace('border-slate-300', 'border-blue-200');
         controls.classList.remove('hidden'); controls.classList.add('flex');
     } else {
         btn.innerText = "Modo Edição: Desativado";
-        btn.classList.replace('bg-blue-50', 'bg-white');
-        btn.classList.replace('text-blue-700', 'text-slate-700');
-        btn.classList.replace('border-blue-200', 'border-slate-300');
+        btn.classList.replace('bg-blue-50', 'bg-white'); btn.classList.replace('text-blue-700', 'text-slate-700'); btn.classList.replace('border-blue-200', 'border-slate-300');
         controls.classList.add('hidden'); controls.classList.remove('flex');
     }
     renderSchedule();
 }
 
 function importMySchedule() {
-    if(confirm("Isso carregará a grade oficial UFG/ENEM na sua conta. Sobrescrever a grade atual?")) {
+    if(confirm("Carregar a grade oficial UFG/ENEM na sua conta? Sobrescreverá a atual.")) {
         userSchedule = JSON.parse(JSON.stringify(RAW_SCHEDULE));
         syncToCloud(); renderAll();
     }
 }
 
 function renderTabs() {
-    const nav = document.getElementById('day-tabs');
-    nav.innerHTML = '';
+    const nav = document.getElementById('day-tabs'); nav.innerHTML = '';
     DAY_ORDER.forEach(d => {
         const btn = document.createElement('button');
         btn.className = 'tab-underline relative whitespace-nowrap pb-2 px-1 ' + (selectedDay===d.key ? 'active font-bold text-[var(--ink)]' : '');
@@ -318,7 +401,8 @@ function renderTabs() {
     });
 
     const mt = document.getElementById('monday-toggle');
-    if(selectedDay === 'mon'){
+    // Mostra alternância apenas se houver registros em mon_a ou mon_b, ou se estiver editando a sua grade original.
+    if(selectedDay === 'mon' && (userSchedule.mon_a.length > 0 || userSchedule.mon_b.length > 0)) {
         mt.classList.remove('hidden'); mt.classList.add('flex');
         mt.innerHTML = `<button onclick="setMonday('A')" class="px-3 py-1 rounded-full ${mondayOverride==='A'?'bg-[var(--ink)] text-white':'text-slate-500'}">Semana A</button>
                         <button onclick="setMonday('B')" class="px-3 py-1 rounded-full ${mondayOverride==='B'?'bg-[var(--ink)] text-white':'text-slate-500'}">Semana B</button>`;
@@ -333,7 +417,12 @@ function renderSchedule() {
     const emptyState = document.getElementById('empty-state');
     list.innerHTML = '';
     
-    const dayKey = selectedDay === 'mon' ? `mon_${mondayOverride.toLowerCase()}` : selectedDay;
+    // Resolve o dia. Se for segunda, e a pessoa tiver mon_a/b, puxa a variante. Senão puxa 'mon' padrão (amigos).
+    let dayKey = selectedDay;
+    if (selectedDay === 'mon' && (userSchedule.mon_a.length > 0 || userSchedule.mon_b.length > 0)) {
+        dayKey = `mon_${mondayOverride.toLowerCase()}`;
+    }
+    
     const blocks = userSchedule[dayKey] || [];
     blocks.sort((a,b) => a.start.localeCompare(b.start));
 
@@ -360,7 +449,6 @@ function renderSchedule() {
 
             const badgeAgora = isNow ? `<span class="text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full text-white shrink-0 shadow-sm" style="background:var(${vColor})">AGORA</span>` : '';
             const deleteBtn = isEditMode ? `<button onclick="deleteBlock('${dayKey}', ${idx})" class="p-1.5 text-xs rounded border bg-white text-red-400 hover:bg-red-50 shrink-0 ml-2">🗑</button>` : '';
-
             const editAction = isEditMode ? `onclick="openBuilderByIndex('${dayKey}', ${idx})"` : '';
             const cursorClass = isEditMode ? 'cursor-pointer hover:opacity-75 transition-opacity' : '';
 
@@ -394,8 +482,7 @@ function dismissPauseAlert() { document.getElementById('pause-alert').classList.
 // TASKS, BUILDER E ESTATÍSTICAS
 // ==========================================
 function renderTasks() {
-    const list = document.getElementById('task-list');
-    list.innerHTML = '';
+    const list = document.getElementById('task-list'); list.innerHTML = '';
     tasks.forEach((t, i) => {
         const li = document.createElement('li'); li.className = "flex items-center gap-2";
         li.innerHTML = `<input type="checkbox" class="w-4 h-4 rounded border-gray-300" ${t.done?'checked':''} onchange="toggleTask(${i})">
@@ -414,63 +501,42 @@ function openBuilder(blk = null, dayKey = null) {
     document.getElementById('builder-title').innerText = blk ? "Editar Atividade" : "Adicionar Atividade";
     
     if (blk) {
-        document.getElementById('b-day').value = dayKey;
-        document.getElementById('b-type').value = blk.type;
-        document.getElementById('b-title').value = blk.title;
-        document.getElementById('b-teacher').value = blk.teacher || '';
-        document.getElementById('b-start').value = blk.start;
-        document.getElementById('b-end').value = blk.end;
+        document.getElementById('b-day').value = dayKey; document.getElementById('b-type').value = blk.type;
+        document.getElementById('b-title').value = blk.title; document.getElementById('b-teacher').value = blk.teacher || '';
+        document.getElementById('b-start').value = blk.start; document.getElementById('b-end').value = blk.end;
     } else {
-        document.getElementById('b-day').value = selectedDay === 'mon' ? `mon_${mondayOverride.toLowerCase()}` : selectedDay;
-        document.getElementById('b-title').value = '';
-        document.getElementById('b-teacher').value = '';
-        document.getElementById('b-start').value = '';
-        document.getElementById('b-end').value = '';
+        let defaultDay = selectedDay;
+        if(selectedDay === 'mon' && (userSchedule.mon_a.length > 0 || userSchedule.mon_b.length > 0)) defaultDay = `mon_${mondayOverride.toLowerCase()}`;
+        document.getElementById('b-day').value = defaultDay;
+        document.getElementById('b-title').value = ''; document.getElementById('b-teacher').value = '';
+        document.getElementById('b-start').value = ''; document.getElementById('b-end').value = '';
     }
-    document.getElementById('builder-modal').classList.remove('hidden');
-    document.getElementById('builder-modal').classList.add('flex');
+    document.getElementById('builder-modal').classList.remove('hidden'); document.getElementById('builder-modal').classList.add('flex');
 }
-
-function openBuilderByIndex(dayKey, idx) {
-    openBuilder(userSchedule[dayKey][idx], dayKey);
-}
-
-function closeBuilder() { 
-    document.getElementById('builder-modal').classList.add('hidden'); 
-    document.getElementById('builder-modal').classList.remove('flex'); 
-    editingBlockData = null;
-}
+function openBuilderByIndex(dayKey, idx) { openBuilder(userSchedule[dayKey][idx], dayKey); }
+function closeBuilder() { document.getElementById('builder-modal').classList.add('hidden'); document.getElementById('builder-modal').classList.remove('flex'); editingBlockData = null; }
 
 function saveBlock() {
     const day = document.getElementById('b-day').value;
     const updatedBlock = {
         _key: editingBlockData ? editingBlockData._key : Math.random().toString(36).substr(2, 9),
-        type: document.getElementById('b-type').value,
-        title: document.getElementById('b-title').value || 'Sem Título',
-        teacher: document.getElementById('b-teacher').value,
-        start: document.getElementById('b-start').value || '00:00',
-        end: document.getElementById('b-end').value || '00:00'
+        type: document.getElementById('b-type').value, title: document.getElementById('b-title').value || 'Sem Título',
+        teacher: document.getElementById('b-teacher').value, start: document.getElementById('b-start').value || '00:00', end: document.getElementById('b-end').value || '00:00'
     };
     
     if (editingBlockData) {
-        // Se mudou o dia da semana, remove do dia antigo e adiciona no novo
         if (editingBlockData.dayKey !== day) {
             userSchedule[editingBlockData.dayKey] = userSchedule[editingBlockData.dayKey].filter(b => b._key !== editingBlockData._key);
-            if (!userSchedule[day]) userSchedule[day] = [];
-            userSchedule[day].push(updatedBlock);
+            if (!userSchedule[day]) userSchedule[day] = []; userSchedule[day].push(updatedBlock);
         } else {
-            // Se manteve o dia, apenas atualiza no mesmo lugar
             const idx = userSchedule[day].findIndex(b => b._key === editingBlockData._key);
             if (idx !== -1) userSchedule[day][idx] = updatedBlock;
         }
     } else {
-        if(!userSchedule[day]) userSchedule[day] = [];
-        userSchedule[day].push(updatedBlock);
+        if(!userSchedule[day]) userSchedule[day] = []; userSchedule[day].push(updatedBlock);
     }
-    
     syncToCloud(); closeBuilder(); renderAll();
 }
-
 function deleteBlock(day, idx) { if(confirm("Excluir esta atividade?")) { userSchedule[day].splice(idx,1); syncToCloud(); renderSchedule(); renderFrequency(); renderAdherenceStats(); } }
 
 function renderCountdowns(){
@@ -505,7 +571,8 @@ function renderFrequency() {
 }
 
 function renderAdherenceStats() {
-    const dayKey = selectedDay === 'mon' ? `mon_${mondayOverride.toLowerCase()}` : selectedDay;
+    let dayKey = selectedDay;
+    if (selectedDay === 'mon' && (userSchedule.mon_a.length > 0 || userSchedule.mon_b.length > 0)) dayKey = `mon_${mondayOverride.toLowerCase()}`;
     const blocks = (userSchedule[dayKey] || []).filter(b => b.type !== 'brk');
     const total = blocks.length; let done = 0;
     blocks.forEach(blk => { if(adherence[blk._key] === 'done') done++; });
@@ -514,9 +581,7 @@ function renderAdherenceStats() {
     document.getElementById('adherence-total').innerText = total;
     document.getElementById('adherence-completed').innerText = done;
     document.getElementById('adherence-pct').innerText = pct + '%';
-    
-    const circle = document.getElementById('adherence-circle');
-    circle.style.clipPath = pct > 50 ? 'inset(0 0 0 0)' : `inset(0 0 0 ${100 - (pct*2)}%)`;
+    document.getElementById('adherence-circle').style.clipPath = pct > 50 ? 'inset(0 0 0 0)' : `inset(0 0 0 ${100 - (pct*2)}%)`;
 }
 
 function renderAll() {
