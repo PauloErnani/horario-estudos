@@ -142,10 +142,10 @@
     </section>
 </div>
 
-<!-- MODAL DO CONSTRUTOR -->
+<!-- MODAL DO CONSTRUTOR / EDIÇÃO -->
 <div id="builder-modal" class="hidden fixed inset-0 z-40 items-center justify-center bg-black/40 px-4">
     <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-        <h2 class="font-bold mb-4">Adicionar Atividade</h2>
+        <h2 id="builder-title" class="font-bold mb-4">Adicionar Atividade</h2>
         <div class="grid grid-cols-2 gap-3 mb-3">
             <div>
                 <label class="block text-xs text-slate-500 mb-1">Dia</label>
@@ -229,6 +229,7 @@ let userSchedule = { mon_a:[], mon_b:[], tue:[], wed:[], thu:[], fri:[], sat:[],
 let adherence = {};
 let tasks = [];
 let isEditMode = false;
+let editingBlockData = null; // Rastreia se estamos editando um bloco existente
 
 let selectedDay = currentWeekdayKey();
 let mondayOverride = localStorage.getItem('ef_monday') || isoWeekParity(new Date());
@@ -360,20 +361,23 @@ function renderSchedule() {
             const badgeAgora = isNow ? `<span class="text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full text-white shrink-0 shadow-sm" style="background:var(${vColor})">AGORA</span>` : '';
             const deleteBtn = isEditMode ? `<button onclick="deleteBlock('${dayKey}', ${idx})" class="p-1.5 text-xs rounded border bg-white text-red-400 hover:bg-red-50 shrink-0 ml-2">🗑</button>` : '';
 
+            const editAction = isEditMode ? `onclick="openBuilderByIndex('${dayKey}', ${idx})"` : '';
+            const cursorClass = isEditMode ? 'cursor-pointer hover:opacity-75 transition-opacity' : '';
+
             const row = document.createElement('div');
-            row.className = `w-full text-left rounded-xl border px-4 py-3 flex items-center gap-4 transition hover:shadow-sm bg-[var(${vColor}-bg)] border-[var(${vColor}-bd)] ${isNow ? 'now-active ring-2 ring-offset-2 ring-[var('+vColor+')]' : ''} ${statClass}`;
+            row.className = `w-full text-left rounded-xl border px-4 py-3 flex items-center justify-between gap-4 transition bg-[var(${vColor}-bg)] border-[var(${vColor}-bd)] ${isNow ? 'now-active ring-2 ring-offset-2 ring-[var('+vColor+')]' : ''} ${statClass}`;
             row.innerHTML = `
-                <div class="w-12 sm:w-16 shrink-0 text-xs font-semibold" style="color:var(${vColor})">${blk.start}<br><span class="font-normal text-slate-400">${blk.end}</span></div>
-                <div class="flex-1 min-w-0 flex items-center justify-between gap-3">
-                    <div class="min-w-0">
+                <div ${editAction} class="flex items-center gap-4 flex-1 min-w-0 ${cursorClass}">
+                    <div class="w-12 sm:w-16 shrink-0 text-xs font-semibold" style="color:var(${vColor})">${blk.start}<br><span class="font-normal text-slate-400">${blk.end}</span></div>
+                    <div class="flex-1 min-w-0">
                         <p class="font-medium truncate" style="color:var(${vColor})">${blk.title}</p>
                         ${blk.teacher ? `<p class="text-xs text-slate-500 truncate">${blk.teacher}</p>` : ''}
                     </div>
-                    <div class="flex items-center gap-2 shrink-0">
-                        ${badgeAgora}
-                        ${adButtons}
-                        ${deleteBtn}
-                    </div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    ${badgeAgora}
+                    ${adButtons}
+                    ${deleteBtn}
                 </div>
             `;
             list.appendChild(row);
@@ -405,23 +409,68 @@ function handleTaskEnter(e) { if(e.key==='Enter') addTask(); }
 function toggleTask(i) { tasks[i].done = !tasks[i].done; syncToCloud(); renderTasks(); }
 function removeTask(i) { tasks.splice(i,1); syncToCloud(); renderTasks(); }
 
-function openBuilder() { document.getElementById('builder-modal').classList.remove('hidden'); document.getElementById('builder-modal').classList.add('flex'); }
-function closeBuilder() { document.getElementById('builder-modal').classList.add('hidden'); document.getElementById('builder-modal').classList.remove('flex'); }
+function openBuilder(blk = null, dayKey = null) {
+    editingBlockData = blk ? { ...blk, dayKey } : null;
+    document.getElementById('builder-title').innerText = blk ? "Editar Atividade" : "Adicionar Atividade";
+    
+    if (blk) {
+        document.getElementById('b-day').value = dayKey;
+        document.getElementById('b-type').value = blk.type;
+        document.getElementById('b-title').value = blk.title;
+        document.getElementById('b-teacher').value = blk.teacher || '';
+        document.getElementById('b-start').value = blk.start;
+        document.getElementById('b-end').value = blk.end;
+    } else {
+        document.getElementById('b-day').value = selectedDay === 'mon' ? `mon_${mondayOverride.toLowerCase()}` : selectedDay;
+        document.getElementById('b-title').value = '';
+        document.getElementById('b-teacher').value = '';
+        document.getElementById('b-start').value = '';
+        document.getElementById('b-end').value = '';
+    }
+    document.getElementById('builder-modal').classList.remove('hidden');
+    document.getElementById('builder-modal').classList.add('flex');
+}
+
+function openBuilderByIndex(dayKey, idx) {
+    openBuilder(userSchedule[dayKey][idx], dayKey);
+}
+
+function closeBuilder() { 
+    document.getElementById('builder-modal').classList.add('hidden'); 
+    document.getElementById('builder-modal').classList.remove('flex'); 
+    editingBlockData = null;
+}
 
 function saveBlock() {
     const day = document.getElementById('b-day').value;
-    if(!userSchedule[day]) userSchedule[day] = [];
-    userSchedule[day].push({
-        _key: Math.random().toString(36).substr(2, 9),
+    const updatedBlock = {
+        _key: editingBlockData ? editingBlockData._key : Math.random().toString(36).substr(2, 9),
         type: document.getElementById('b-type').value,
         title: document.getElementById('b-title').value || 'Sem Título',
         teacher: document.getElementById('b-teacher').value,
         start: document.getElementById('b-start').value || '00:00',
         end: document.getElementById('b-end').value || '00:00'
-    });
+    };
+    
+    if (editingBlockData) {
+        // Se mudou o dia da semana, remove do dia antigo e adiciona no novo
+        if (editingBlockData.dayKey !== day) {
+            userSchedule[editingBlockData.dayKey] = userSchedule[editingBlockData.dayKey].filter(b => b._key !== editingBlockData._key);
+            if (!userSchedule[day]) userSchedule[day] = [];
+            userSchedule[day].push(updatedBlock);
+        } else {
+            // Se manteve o dia, apenas atualiza no mesmo lugar
+            const idx = userSchedule[day].findIndex(b => b._key === editingBlockData._key);
+            if (idx !== -1) userSchedule[day][idx] = updatedBlock;
+        }
+    } else {
+        if(!userSchedule[day]) userSchedule[day] = [];
+        userSchedule[day].push(updatedBlock);
+    }
+    
     syncToCloud(); closeBuilder(); renderAll();
-    document.getElementById('b-title').value = ''; document.getElementById('b-teacher').value = '';
 }
+
 function deleteBlock(day, idx) { if(confirm("Excluir esta atividade?")) { userSchedule[day].splice(idx,1); syncToCloud(); renderSchedule(); renderFrequency(); renderAdherenceStats(); } }
 
 function renderCountdowns(){
