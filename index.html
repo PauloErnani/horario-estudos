@@ -290,10 +290,6 @@ async function syncToCloud() {
         await db.collection('user_data').doc(currentUser.uid).set({ schedule: userSchedule, adherence: adherence, tasks: tasks });
     }
 }
-
-// ==========================================
-// EXTRAÇÃO DE IMAGEM COM GEMINI API
-// ==========================================
 // ==========================================
 // EXTRAÇÃO DE IMAGEM COM GEMINI API
 // ==========================================
@@ -323,8 +319,7 @@ async function processImageWithGemini(event) {
         };
 
         // Concatenação direta e segura para evitar quebra de formatação
-        const apiUrl = "[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=)" + GEMINI_API_KEY;
-
+const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + GEMINI_API_KEY;
         try {
             const response = await fetch(apiUrl, {
                 method: 'POST',
