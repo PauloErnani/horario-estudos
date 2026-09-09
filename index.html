@@ -147,9 +147,10 @@
             <p class="text-sm font-semibold text-[var(--ink)]">Aderência Diária</p>
             <p class="text-xs text-slate-500 mt-1">Blocos marcados como "Cumpridos" hoje.</p>
             <div class="flex items-center gap-4 mt-6">
-                <div class="w-20 h-20 rounded-full flex items-center justify-center border-4 border-slate-100 relative">
-                    <div id="adherence-circle" class="absolute inset-0 rounded-full border-4 border-[var(--physical)] transition-all duration-500"></div>
-                    <span id="adherence-pct" class="text-xl font-bold text-slate-700">0%</span>
+                <div class="w-20 h-20 rounded-full flex items-center justify-center relative">
+                    <div id="adherence-circle" class="absolute inset-0 rounded-full transition-all duration-500" style="background: conic-gradient(var(--physical) 0deg, #eef0f2 0deg);"></div>
+                    <div class="absolute inset-[6px] bg-white rounded-full"></div>
+                    <span id="adherence-pct" class="relative z-10 text-xl font-bold text-slate-700">0%</span>
                 </div>
                 <div>
                     <p class="text-sm font-medium text-slate-600"><span id="adherence-completed">0</span> de <span id="adherence-total">0</span> blocos</p>
@@ -167,7 +168,6 @@
             <div>
                 <label class="block text-xs text-slate-500 mb-1">Dia</label>
                 <select id="b-day" class="w-full border rounded-lg px-3 py-2 text-sm">
-                    <option value="mon">Segunda</option>
                     <option value="mon_a">Segunda (Semana A)</option>
                     <option value="mon_b">Segunda (Semana B)</option>
                     <option value="tue">Terça</option>
@@ -209,6 +209,12 @@
 // ==========================================
 // 1. CONFIGURAÇÕES DE API (COLE AQUI)
 // ==========================================
+// Observação: expor este objeto de config do Firebase no cliente é normal e
+// esperado (é assim que o SDK do Firebase funciona). A proteção real dos
+// dados vem das REGRAS DE SEGURANÇA do Firestore, configuradas no console do
+// Firebase — confirme que elas restringem cada usuário a ler/escrever
+// apenas o próprio documento em `user_data/{uid}`, por exemplo:
+//   match /user_data/{uid} { allow read, write: if request.auth.uid == uid; }
 const firebaseConfig = {
   apiKey: "AIzaSyBtOgntGP8gJZB2xjrYhO4Ft49v1n-hFAQ",
   authDomain: "horariodeestudos-38455.firebaseapp.com",
@@ -222,7 +228,11 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 // COLE SUA CHAVE DO GEMINI API AQUI
-const GEMINI_API_KEY = 'AQ.Ab8RN6KDRsqw-88Y2a8lSR1qSkNwt_okOq6udy9yNqtJ9Z5HMg'; 
+// Uso pessoal / poucos amigos: chave fixa no código para não pedir nada ao
+// usuário. Restrinja essa chave no Google Cloud Console por "referenciador
+// HTTP" (domínio do site) e por API (só Generative Language API), e defina
+// uma cota/orçamento diário baixo — assim, mesmo exposta, o risco fica baixo.
+const GEMINI_API_KEY = 'AQ.Ab8RN6IUwyj1X5yARnvAnHxtWRj9PSSO-iN3h8Hqau-Tw7QB2g';
 
 // ==========================================
 // DADOS OFICIAIS UFG (PARA IMPORTAÇÃO)
@@ -275,21 +285,38 @@ function logout() { auth.signOut(); }
 function showError(msg) { const el = document.getElementById('auth-error'); el.innerText = msg; el.classList.remove('hidden'); }
 
 async function loadDataFromCloud() {
-    const doc = await db.collection('user_data').doc(currentUser.uid).get();
-    if (doc.exists) {
-        const data = doc.data();
-        userSchedule = data.schedule || userSchedule;
-        adherence = data.adherence || {};
-        tasks = data.tasks || [];
+    try {
+        const doc = await db.collection('user_data').doc(currentUser.uid).get();
+        if (doc.exists) {
+            const data = doc.data();
+            userSchedule = data.schedule || userSchedule;
+            adherence = data.adherence || {};
+            tasks = data.tasks || [];
+        }
+        // Migração: versões antigas podiam salvar blocos numa "Segunda" genérica
+        // (userSchedule.mon) que nunca aparecia na tela. Move para a variante A.
+        if (userSchedule.mon && userSchedule.mon.length) {
+            userSchedule.mon_a = [...(userSchedule.mon_a || []), ...userSchedule.mon];
+            userSchedule.mon = [];
+            syncToCloud();
+        }
+    } catch (err) {
+        console.error('Falha ao carregar dados da nuvem:', err);
+        alert('Não foi possível carregar seus dados salvos. Verifique sua conexão e recarregue a página.');
     }
     renderAll();
 }
 
 async function syncToCloud() {
-    if(currentUser) {
-        await db.collection('user_data').doc(currentUser.uid).set({ schedule: userSchedule, adherence: adherence, tasks: tasks });
+    if (currentUser) {
+        try {
+            await db.collection('user_data').doc(currentUser.uid).set({ schedule: userSchedule, adherence: adherence, tasks: tasks });
+        } catch (err) {
+            console.error('Falha ao salvar na nuvem:', err);
+        }
     }
 }
+
 // ==========================================
 // EXTRAÇÃO DE IMAGEM COM GEMINI API
 // ==========================================
@@ -297,8 +324,8 @@ async function processImageWithGemini(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (!GEMINI_API_KEY || GEMINI_API_KEY === 'SUA_CHAVE_GEMINI_AQUI') {
-        alert("Erro: A chave da API do Gemini não foi configurada no código-fonte.");
+    if (!GEMINI_API_KEY || GEMINI_API_KEY === 'COLE_SUA_CHAVE_AQUI') {
+        alert("Erro: a chave da API do Gemini ainda não foi configurada no código-fonte.");
         return;
     }
 
@@ -312,14 +339,14 @@ async function processImageWithGemini(event) {
         const payload = {
             contents: [{
                 parts: [
-                    { text: "Extract the study schedule from this image. Return ONLY a valid JSON object matching exactly this structure: `{\"mon\": [], \"tue\": [{\"start\": \"14:30\", \"end\": \"15:15\", \"title\": \"Química\", \"teacher\": \"Hugo\", \"type\": \"exact\"}], \"wed\": [], \"thu\": [], \"fri\": [], \"sat\": [], \"sun\": []}`. Map subjects to types strictly choosing from: 'exact' (Math, Physics, Chemistry), 'nat' (Biology), 'human' (History, Geo, Phil, Soc), 'lang' (Portuguese, Redação, English, Text), 'brk' (Intervalo, Descansar). Ensure all times are in HH:MM format. Do not include markdown formatting like ```json. Do not include any explanations." },
+                    { text: "Extract the study schedule from this image. Return ONLY a valid JSON object matching exactly this structure: `{\"mon\": [], \"tue\": [{\"start\": \"14:30\", \"end\": \"15:15\", \"title\": \"Química\", \"teacher\": \"Hugo\", \"type\": \"exact\"}], \"wed\": [], \"thu\": [], \"fri\": [], \"sat\": [], \"sun\": []}`. Map subjects to types strictly choosing from: 'exact' (Math, Physics, Chemistry), 'nat' (Biology), 'human' (History, Geo, Phil, Soc), 'lang' (Portuguese, Redação regular class, English, Text), 'physical' (Academia, Caminhada, gym, exercise), 'special' (electives, projetos especiais like 'Escrita na Medida', 'Específica de Matemática'), 'assess' (Simulado, Produção de Texto, mock exams, final essay sessions), 'brk' (Intervalo, break). Ensure all times are in HH:MM format. Do not include markdown formatting like ```json. Do not include any explanations." },
                     { inline_data: { mime_type: mimeType, data: base64Image } }
                 ]
             }]
         };
 
-        // Concatenação direta e segura para evitar quebra de formatação
-const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + GEMINI_API_KEY;
+        const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + GEMINI_API_KEY;
+
         try {
             const response = await fetch(apiUrl, {
                 method: 'POST',
@@ -374,6 +401,7 @@ const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1
 // ==========================================
 function currentWeekdayKey(){ const wd = new Date().getDay(); const found = DAY_ORDER.find(d=>d.wd===wd); return found ? found.key : 'mon'; }
 function isoWeekParity(d){ const onejan = new Date(d.getFullYear(),0,1); const week = Math.ceil((((d - onejan) / 86400000) + onejan.getDay()+1)/7); return week % 2 === 1 ? 'A' : 'B'; }
+function todayISO(){ const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 
 function toggleEditMode() {
     isEditMode = !isEditMode;
@@ -446,14 +474,14 @@ function renderSchedule() {
             const isNow = nowActive && nowStr >= blk.start && nowStr < blk.end;
             if (isNow && blk.type !== 'brk') isAnyBlockActive = true;
 
-            const stat = adherence[blk._key];
+            const stat = adherence[todayISO() + '_' + blk._key];
             const statClass = stat === 'done' ? 'opacity-50 grayscale' : (stat === 'skipped' ? 'opacity-40 grayscale line-through' : '');
             const vColor = TYPES[blk.type] || '--exact';
 
-            const adButtons = blk.type !== 'brk' ? `
+            const adButtons = (blk.type !== 'brk' && nowActive) ? `
                 <div class="flex gap-1 shrink-0">
-                    <button onclick="toggleAdherence('${blk._key}', 'done')" class="p-1.5 text-xs rounded border ${stat==='done' ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-slate-400 hover:bg-slate-50'}">✓</button>
-                    <button onclick="toggleAdherence('${blk._key}', 'skipped')" class="p-1.5 text-xs rounded border ${stat==='skipped' ? 'bg-red-100 text-red-700 border-red-300' : 'bg-white text-slate-400 hover:bg-slate-50'}">✗</button>
+                    <button onclick="toggleAdherence('${todayISO()}_${blk._key}', 'done')" class="p-1.5 text-xs rounded border ${stat==='done' ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-slate-400 hover:bg-slate-50'}">✓</button>
+                    <button onclick="toggleAdherence('${todayISO()}_${blk._key}', 'skipped')" class="p-1.5 text-xs rounded border ${stat==='skipped' ? 'bg-red-100 text-red-700 border-red-300' : 'bg-white text-slate-400 hover:bg-slate-50'}">✗</button>
                 </div>` : '';
 
             const badgeAgora = isNow ? `<span class="text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full text-white shrink-0 shadow-sm" style="background:var(${vColor})">AGORA</span>` : '';
@@ -580,21 +608,36 @@ function renderFrequency() {
 }
 
 function renderAdherenceStats() {
-    let dayKey = selectedDay;
-    if (selectedDay === 'mon' && (userSchedule.mon_a.length > 0 || userSchedule.mon_b.length > 0)) dayKey = `mon_${mondayOverride.toLowerCase()}`;
+    let dayKey = currentWeekdayKey();
+    if (dayKey === 'mon' && (userSchedule.mon_a.length > 0 || userSchedule.mon_b.length > 0)) dayKey = `mon_${mondayOverride.toLowerCase()}`;
     const blocks = (userSchedule[dayKey] || []).filter(b => b.type !== 'brk');
     const total = blocks.length; let done = 0;
-    blocks.forEach(blk => { if(adherence[blk._key] === 'done') done++; });
+    const prefix = todayISO() + '_';
+    blocks.forEach(blk => { if(adherence[prefix + blk._key] === 'done') done++; });
     const pct = total === 0 ? 0 : Math.round((done / total) * 100);
-    
+
     document.getElementById('adherence-total').innerText = total;
     document.getElementById('adherence-completed').innerText = done;
     document.getElementById('adherence-pct').innerText = pct + '%';
-    document.getElementById('adherence-circle').style.clipPath = pct > 50 ? 'inset(0 0 0 0)' : `inset(0 0 0 ${100 - (pct*2)}%)`;
+    document.getElementById('adherence-circle').style.background =
+        `conic-gradient(var(--physical) ${pct * 3.6}deg, #eef0f2 ${pct * 3.6}deg)`;
 }
 
 function renderAll() {
-    document.getElementById('motivational-quote').innerText = ["A disciplina é a ponte entre metas e realizações.","Apenas 1% de inspiração e 99% de transpiração.","Foco na UFG. Um bloco de cada vez."][new Date().getDay() % 3];
+    const MOTIVATION_PHRASES = [
+        "A disciplina é a ponte entre metas e realizações.",
+        "Apenas 1% de inspiração e 99% de transpiração.",
+        "Foco na UFG. Um bloco de cada vez.",
+        "Cada bloco cumprido hoje é um pouco menos distância até a prova.",
+        "Consistência pequena e diária pesa mais que esforço de última hora.",
+        "Descansar no horário certo também é estudar.",
+        "Um erro revisado hoje é uma questão a menos errada na prova.",
+        "A regularidade da grade é a sua maior vantagem agora.",
+        "Passo a passo, sem pressa e sem pausa.",
+        "Menos perfeição, mais constância."
+    ];
+    const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+    document.getElementById('motivational-quote').innerText = MOTIVATION_PHRASES[dayOfYear % MOTIVATION_PHRASES.length];
     renderTabs(); renderSchedule(); renderTasks(); renderCountdowns(); renderFrequency(); renderAdherenceStats();
 }
 
