@@ -298,13 +298,12 @@ async function processImageWithGemini(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Se a chave não estiver configurada, avisa o usuário.
     if (!GEMINI_API_KEY || GEMINI_API_KEY === 'SUA_CHAVE_GEMINI_AQUI') {
         alert("Erro: A chave da API do Gemini não foi configurada no código-fonte.");
         return;
     }
 
-    // Exibe overlay de loading
+    const mimeType = file.type; 
     document.getElementById('ai-loading').classList.remove('hidden');
 
     const reader = new FileReader();
@@ -315,7 +314,7 @@ async function processImageWithGemini(event) {
             contents: [{
                 parts: [
                     { text: "Extract the study schedule from this image. Return ONLY a valid JSON object matching exactly this structure: `{\"mon\": [], \"tue\": [{\"start\": \"14:30\", \"end\": \"15:15\", \"title\": \"Química\", \"teacher\": \"Hugo\", \"type\": \"exact\"}], \"wed\": [], \"thu\": [], \"fri\": [], \"sat\": [], \"sun\": []}`. Map subjects to types strictly choosing from: 'exact' (Math, Physics, Chemistry), 'nat' (Biology), 'human' (History, Geo, Phil, Soc), 'lang' (Portuguese, Redação, English, Text), 'brk' (Intervalo, Descansar). Ensure all times are in HH:MM format. Do not include markdown formatting like ```json. Do not include any explanations." },
-                    { inline_data: { mime_type: "image/jpeg", data: base64Image } }
+                    { inline_data: { mime_type: mimeType, data: base64Image } }
                 ]
             }]
         };
@@ -327,22 +326,25 @@ async function processImageWithGemini(event) {
                 body: JSON.stringify(payload)
             });
 
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(`Erro ${response.status}: ${errData.error?.message || 'Falha na requisição'}`);
+            }
+
             const result = await response.json();
             
             if (result.candidates && result.candidates[0].content.parts[0].text) {
                 let jsonText = result.candidates[0].content.parts[0].text.trim();
-                // Limpeza de possíveis formatações residuais Markdown
                 jsonText = jsonText.replace(/^```json/g, '').replace(/^```/g, '').replace(/```$/g, '').trim();
                 
                 const newSchedule = JSON.parse(jsonText);
                 
-                // Adiciona chaves únicas para cada bloco gerado
                 for (const day in newSchedule) {
                     newSchedule[day] = newSchedule[day].map(blk => ({...blk, _key: Math.random().toString(36).substr(2, 9)}));
                 }
 
-                if(confirm("Horário lido com sucesso pela IA! Deseja substituir sua grade atual por esta?")) {
-                    userSchedule = { ...userSchedule, ...newSchedule }; // Mescla com chaves existentes para não quebrar
+                if(confirm("Horário lido com sucesso pela IA! Deseja mesclar essa nova grade com a sua atual?")) {
+                    userSchedule = { ...userSchedule, ...newSchedule };
                     syncToCloud();
                     renderAll();
                 }
@@ -351,15 +353,14 @@ async function processImageWithGemini(event) {
             }
         } catch (error) {
             console.error(error);
-            alert("Erro ao conectar com a API do Gemini. Verifique sua conexão e a validade da chave.");
+            alert("Falha na comunicação: " + error.message);
         } finally {
             document.getElementById('ai-loading').classList.add('hidden');
-            event.target.value = ''; // Limpa o input
+            event.target.value = ''; 
         }
     };
     reader.readAsDataURL(file);
 }
-
 // ==========================================
 // LÓGICA CORE E RENDERIZAÇÃO
 // ==========================================
