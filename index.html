@@ -232,7 +232,7 @@ const db = firebase.firestore();
 // usuário. Restrinja essa chave no Google Cloud Console por "referenciador
 // HTTP" (domínio do site) e por API (só Generative Language API), e defina
 // uma cota/orçamento diário baixo — assim, mesmo exposta, o risco fica baixo.
-const GEMINI_API_KEY = 'AQ.Ab8RN6IUwyj1X5yARnvAnHxtWRj9PSSO-iN3h8Hqau-Tw7QB2g';
+const GEMINI_API_KEY = 'AQ.Ab8RN6JWbDhy_1iD2FsC0ft4JwN54D0aMRIbpVFiGrh9cCggEg';
 
 // ==========================================
 // DADOS OFICIAIS UFG (PARA IMPORTAÇÃO)
@@ -345,12 +345,15 @@ async function processImageWithGemini(event) {
             }]
         };
 
-        const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + GEMINI_API_KEY;
+        const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent";
 
         try {
             const response = await fetch(apiUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': GEMINI_API_KEY
+                },
                 body: JSON.stringify(payload)
             });
 
