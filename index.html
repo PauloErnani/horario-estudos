@@ -345,7 +345,7 @@ async function processImageWithGemini(event) {
             }]
         };
 
-        const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + GEMINI_API_KEY;
+        const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + GEMINI_API_KEY;
 
         try {
             const response = await fetch(apiUrl, {
@@ -358,12 +358,14 @@ async function processImageWithGemini(event) {
             const responseText = await response.text();
 
             if (!response.ok) {
+                let detail = `Erro ${response.status}.`;
                 try {
                     const errData = JSON.parse(responseText);
-                    throw new Error(`Erro ${response.status}: ${errData.error?.message}`);
-                } catch (err) {
-                    throw new Error(`Erro ${response.status}. Verifique se a Chave da API está correta e sem espaços em branco.`);
+                    if (errData.error?.message) detail = `Erro ${response.status}: ${errData.error.message}`;
+                } catch (parseErr) {
+                    // resposta não veio em JSON; mantém a mensagem genérica com o status
                 }
+                throw new Error(detail);
             }
 
             const result = JSON.parse(responseText);
